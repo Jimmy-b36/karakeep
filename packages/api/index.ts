@@ -20,6 +20,7 @@ import lists from "./routes/lists";
 import metrics, { registerMetrics } from "./routes/metrics";
 import publicRoute from "./routes/public";
 import rss from "./routes/rss";
+import { speechBookmarkRoutes, speechVoicesRoutes } from "./routes/speech";
 import tags from "./routes/tags";
 import trpc from "./routes/trpc";
 import users from "./routes/users";
@@ -40,7 +41,9 @@ const v1 = new Hono<{
   .route("/admin", admin)
   .route("/rss", rss)
   .route("/backups", backups)
-  .route("/feeds", feeds);
+  .route("/feeds", feeds)
+  .route("/speech", speechVoicesRoutes)
+  .route("/bookmarks", speechBookmarkRoutes);
 
 const app = new Hono<{
   Variables: {

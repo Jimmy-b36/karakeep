@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import HighlightCard from "@/components/dashboard/highlights/HighlightCard";
 import ReaderSettingsPopover from "@/components/dashboard/preview/ReaderSettingsPopover";
 import ReaderView from "@/components/dashboard/preview/ReaderView";
+import ReadAloudControls from "@/components/dashboard/preview/ReadAloudControls";
 import { Button } from "@/components/ui/button";
 import { FullPageSpinner } from "@/components/ui/full-page-spinner";
 import { Separator } from "@/components/ui/separator";
@@ -38,6 +39,7 @@ export default function ReaderViewPage() {
   const { settings } = useReaderSettings();
   const [showHighlights, setShowHighlights] = useState(false);
   const isOwner = session?.user?.id === bookmark?.userId;
+  const canReadAloud = isOwner && bookmark?.content.type === BookmarkTypes.LINK;
 
   const onClose = () => {
     if (window.history.length > 1) {
@@ -67,6 +69,8 @@ export default function ReaderViewPage() {
             <Button variant="ghost" size="icon" onClick={handlePrint}>
               <Printer className="h-4 w-4" />
             </Button>
+
+            <ReadAloudControls bookmarkId={bookmarkId} enabled={canReadAloud} />
 
             <ReaderSettingsPopover variant="ghost" />
 

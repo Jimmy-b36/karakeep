@@ -266,6 +266,16 @@ If your Karakeep instance needs to connect through a proxy server, you can confi
 These proxy settings will be used by the crawler and other components that make outgoing HTTP requests.
 :::
 
+## Local Speech (Read Aloud)
+
+Karakeep can read saved articles aloud by talking to a private [Reedit-compatible Apple speech worker](https://github.com/karakeep-app/karakeep) over its `/voices` and `/synthesize` endpoints. The worker is single-slot and returns WAV audio; Karakeep keeps the worker token server-side and never exposes it to the browser.
+
+| Name                                | Required | Default | Description                                                                                                                                                                                                                         |
+| ----------------------------------- | -------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| REEDIT_SPEECH_URL                   | No       | Not set | Base URL of the private speech worker (e.g. `http://127.0.0.1:4318`). Both `REEDIT_SPEECH_URL` and `REEDIT_SPEECH_TOKEN` must be set to enable read-aloud.                                                                         |
+| REEDIT_SPEECH_TOKEN                 | No       | Not set | Bearer token used to authenticate server-to-server requests to the speech worker. This is a secret; it is never sent to browsers.                                                                                                   |
+| REEDIT_SPEECH_ALLOW_PRIVATE_HTTP    | No       | false   | The worker URL must use HTTPS. HTTP is allowed only for `127.0.0.1`/`localhost`, or for a private bridge (e.g. `192.168.64.1`) when enabled. Accepted values: `true` or `1` (enable), `false` or `0` (disable).                                                                          |
+
 ## Monitoring
 
 Karakeep supports distributed tracing and structured event logging via OpenTelemetry. When enabled, traces and logs are collected for tRPC API calls, background worker operations, and other key workflows. Karakeep also exports prometheus-based metrics.

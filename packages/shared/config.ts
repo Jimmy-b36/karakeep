@@ -16,6 +16,13 @@ const optionalStringBool = () =>
     .transform((s) => s === "true")
     .optional();
 
+// Reedit spells this flag with `1`/`0`; Karakeep bools use `true`/`false`.
+// Accept both spellings for this one variable only.
+export const zReeditAllowPrivateHttp = z
+  .string()
+  .refine((s) => s === "true" || s === "false" || s === "1" || s === "0")
+  .transform((s) => s === "true" || s === "1");
+
 const allEnv = z.object({
   PORT: z.coerce.number().default(3000),
   WORKERS_HOST: z.string().default("127.0.0.1"),
@@ -188,6 +195,12 @@ const allEnv = z.object({
   WEBHOOK_RETRY_TIMES: z.coerce.number().int().min(0).default(3),
   MAX_RSS_FEEDS_PER_USER: z.coerce.number().default(1000),
   MAX_WEBHOOKS_PER_USER: z.coerce.number().default(100),
+
+  // Local speech (read-aloud) worker
+  REEDIT_SPEECH_URL: z.string().url().optional(),
+  REEDIT_SPEECH_TOKEN: z.string().optional(),
+  REEDIT_SPEECH_ALLOW_PRIVATE_HTTP: zReeditAllowPrivateHttp.optional(),
+
   // Legal
   TERMS_OF_SERVICE_URL: z.string().url().optional(),
   PRIVACY_POLICY_URL: z.string().url().optional(),
@@ -564,6 +577,11 @@ const serverConfigSchema = allEnv.transform((val, ctx) => {
         enabled: val.OTEL_EVENT_LOGS_EXPORT_ENABLED,
         endpoint: val.OTEL_EXPORTER_OTLP_LOGS_ENDPOINT,
       },
+    },
+    speech: {
+      url: val.REEDIT_SPEECH_URL,
+      token: val.REEDIT_SPEECH_TOKEN,
+      allowPrivateHttp: val.REEDIT_SPEECH_ALLOW_PRIVATE_HTTP ?? false,
     },
   };
   if (obj.auth.emailVerificationRequired && !obj.email.smtp) {

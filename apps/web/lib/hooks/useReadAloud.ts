@@ -1,0 +1,192 @@
+"use client";
+
+import { useCallback, useEffect, useRef, useState } from "react";
+
+import {
+  fetchSpeechChunk,
+  fetchSpeechVoices,
+  ReadAloudError,
+  ReadAloudPlayer,
+} from "@/lib/read-aloud";
+import type {
+  ReadAloudErrorInfo,
+  ReadAloudSnapshot,
+  SpeechVoice,
+} from "@/lib/read-aloud";
+
+export const READ_ALOUD_SPEEDS = [0.75, 1, 1.25, 1.5, 1.75, 2] as const;
+
+const VOICE_STORAGE_KEY = "karakeep-read-aloud-voice";
+const SPEED_STORAGE_KEY = "karakeep-read-aloud-speed";
+
+function readStoredVoice(): string | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+  try {
+    return window.localStorage.getItem(VOICE_STORAGE_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function readStoredSpeed(): number {
+  if (typeof window === "undefined") {
+    return 1;
+  }
+  try {
+    const value = Number(window.localStorage.getItem(SPEED_STORAGE_KEY));
+    return (READ_ALOUD_SPEEDS as readonly number[]).includes(value) ? value : 1;
+  } catch {
+    return 1;
+  }
+}
+
+function writeStoredValue(key: string, value: string): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+  try {
+    window.localStorage.setItem(key, value);
+  } catch {
+    // Preferences are optional; never block playback on storage failures.
+  }
+}
+
+export type VoicesStatus = "idle" | "loading" | "ready" | "error";
+
+export function useReadAloud(bookmarkId: string, enabled: boolean) {
+  const [snapshot, setSnapshot] = useState<ReadAloudSnapshot>({
+    status: "idle",
+    error: null,
+  });
+  const [voices, setVoices] = useState<SpeechVoice[]>([]);
+  const [voicesStatus, setVoicesStatus] = useState<VoicesStatus>("idle");
+  const [voicesError, setVoicesError] = useState<ReadAloudErrorInfo | null>(
+    null,
+  );
+  const [voiceId, setVoiceIdState] = useState<string | null>(readStoredVoice);
+  const [speed, setSpeedState] = useState<number>(readStoredSpeed);
+
+  const playerRef = useRef<ReadAloudPlayer | null>(null);
+  const voiceRef = useRef<string | null>(voiceId);
+  const speedRef = useRef<number>(speed);
+  const voicesLoadedRef = useRef(false);
+
+  voiceRef.current = voiceId;
+  speedRef.current = speed;
+
+  useEffect(() => {
+    if (!enabled) {
+      return;
+    }
+    const player = new ReadAloudPlayer(
+      {
+        fetchChunk: fetchSpeechChunk,
+        createAudio: () => new Audio(),
+        createObjectURL: (blob) => URL.createObjectURL(blob),
+        revokeObjectURL: (url) => URL.revokeObjectURL(url),
+        onSnapshot: setSnapshot,
+      },
+      bookmarkId,
+      voiceRef.current ?? "",
+      speedRef.current,
+    );
+    playerRef.current = player;
+    return () => {
+      player.dispose();
+      playerRef.current = null;
+    };
+  }, [bookmarkId, enabled]);
+
+  // Losing owner eligibility (or navigating to a non-LINK bookmark) stops
+  // playback and clears the previous session's UI state.
+  useEffect(() => {
+    if (!enabled) {
+      setSnapshot({ status: "idle", error: null });
+    }
+  }, [enabled]);
+
+  const loadVoices = useCallback(async () => {
+    if (voicesLoadedRef.current) {
+      return;
+    }
+    voicesLoadedRef.current = true;
+    setVoicesStatus("loading");
+    setVoicesError(null);
+    try {
+      const list = await fetchSpeechVoices();
+      const current = voiceRef.current;
+      const chosen =
+        current && list.some((voice) => voice.id === current)
+          ? current
+          : (list[0]?.id ?? null);
+      setVoices(list);
+      if (chosen !== current) {
+        setVoiceIdState(chosen);
+        voiceRef.current = chosen;
+        if (chosen) {
+          writeStoredValue(VOICE_STORAGE_KEY, chosen);
+          playerRef.current?.setVoice(chosen);
+        }
+      }
+      setVoicesStatus("ready");
+    } catch (error) {
+      voicesLoadedRef.current = false;
+      setVoicesError(
+        error instanceof ReadAloudError
+          ? error.info
+          : {
+              code: "network",
+              message: "Could not reach the local speech service.",
+            },
+      );
+      setVoicesStatus("error");
+    }
+  }, []);
+
+  const setVoice = useCallback((id: string) => {
+    setVoiceIdState(id);
+    writeStoredValue(VOICE_STORAGE_KEY, id);
+    playerRef.current?.setVoice(id);
+  }, []);
+
+  const setSpeed = useCallback((value: number) => {
+    setSpeedState(value);
+    writeStoredValue(SPEED_STORAGE_KEY, String(value));
+    playerRef.current?.setSpeed(value);
+  }, []);
+
+  const start = useCallback(() => {
+    playerRef.current?.start();
+  }, []);
+  const pause = useCallback(() => {
+    playerRef.current?.pause();
+  }, []);
+  const resume = useCallback(() => {
+    playerRef.current?.resume();
+  }, []);
+  const stop = useCallback(() => {
+    playerRef.current?.stop();
+  }, []);
+  const retry = useCallback(() => {
+    playerRef.current?.retry();
+  }, []);
+
+  return {
+    snapshot,
+    voices,
+    voicesStatus,
+    voicesError,
+    voiceId,
+    speed,
+    setVoice,
+    setSpeed,
+    loadVoices,
+    start,
+    pause,
+    resume,
+    stop,
+    retry,
+  };
+}
