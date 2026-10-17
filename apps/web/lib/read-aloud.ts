@@ -43,6 +43,7 @@ export interface SpeechChunk {
   next: number | null;
   contentVersion: string;
   range: string;
+  text?: string;
 }
 
 export interface SpeechChunkRequest {
@@ -59,6 +60,26 @@ function isAbortError(error: unknown): boolean {
     error !== null &&
     (error as { name?: unknown }).name === "AbortError"
   );
+}
+
+function decodeSpeechText(value: string | null): string | undefined {
+  if (value === null) {
+    return undefined;
+  }
+  try {
+    const base64 = value.replace(/-/g, "+").replace(/_/g, "/");
+    const padded = base64.padEnd(
+      base64.length + ((4 - (base64.length % 4)) % 4),
+      "=",
+    );
+    const binary = atob(padded);
+    const bytes = Uint8Array.from(binary, (character) =>
+      character.charCodeAt(0),
+    );
+    return new TextDecoder().decode(bytes);
+  } catch {
+    return undefined;
+  }
 }
 
 function parseRetryAfter(value: string | null): number | undefined {
@@ -174,6 +195,7 @@ export async function fetchSpeechChunk(
     next,
     contentVersion: versionHeader,
     range: response.headers.get("X-Speech-Range") ?? "",
+    text: decodeSpeechText(response.headers.get("X-Speech-Text")),
   };
 }
 
@@ -234,6 +256,7 @@ export type ReadAloudStatus =
 export interface ReadAloudSnapshot {
   status: ReadAloudStatus;
   error: ReadAloudErrorInfo | null;
+  currentText: string | null;
 }
 
 export interface AudioLike {
@@ -279,7 +302,12 @@ export class ReadAloudPlayer {
   private currentStart = 0;
   private nextOffset: number | null = 0;
   private sessionActive = false;
-  private snapshot: ReadAloudSnapshot = { status: "idle", error: null };
+  private currentText: string | null = null;
+  private snapshot: ReadAloudSnapshot = {
+    status: "idle",
+    error: null,
+    currentText: null,
+  };
   private disposed = false;
 
   constructor(
@@ -370,6 +398,7 @@ export class ReadAloudPlayer {
     this.version = null;
     this.currentStart = 0;
     this.nextOffset = 0;
+    this.currentText = null;
     this.clearAudio();
   }
 
@@ -385,17 +414,18 @@ export class ReadAloudPlayer {
     this.audio.load();
   }
 
-  private emit(snapshot: ReadAloudSnapshot): void {
+  private emit(snapshot: Omit<ReadAloudSnapshot, "currentText">): void {
     if (this.disposed) {
       return;
     }
-    this.snapshot = snapshot;
-    this.deps.onSnapshot(snapshot);
+    this.snapshot = { ...snapshot, currentText: this.currentText };
+    this.deps.onSnapshot(this.snapshot);
   }
 
   private fail(error: ReadAloudErrorInfo): void {
     this.controller?.abort();
     this.controller = null;
+    this.currentText = null;
     this.emit({ status: "error", error });
   }
 
@@ -446,6 +476,7 @@ export class ReadAloudPlayer {
       if (token !== this.session) {
         return;
       }
+      this.currentText = chunk.text ?? null;
       this.emit({ status: "playing", error: null });
     } catch (error) {
       if (token !== this.session) {
@@ -466,6 +497,7 @@ export class ReadAloudPlayer {
     this.clearAudio();
     if (next === null) {
       this.sessionActive = false;
+      this.currentText = null;
       this.emit({ status: "idle", error: null });
       return;
     }

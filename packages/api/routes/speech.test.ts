@@ -452,6 +452,29 @@ describe("POST /bookmarks/:bookmarkId/speech", () => {
     expect(synthesizeSpeechMock).toHaveBeenCalledOnce();
     const text = synthesizeSpeechMock.mock.calls[0]![0] as string;
     expect([...text].length).toBe(1000);
+    expect(
+      Buffer.from(response.headers.get("X-Speech-Text")!, "base64url").toString(
+        "utf8",
+      ),
+    ).toBe(text);
+  });
+
+  it("returns the chunk text as a UTF-8 base64url header", async () => {
+    const content = "Héllo wörld — unicode 😀";
+    fakeBookmark({ content, contentVersion: "sha256:u" });
+    synthesizeSpeechMock.mockResolvedValue(Buffer.from("RIFFxxxxWAVEyyyy"));
+    const app = buildBookmarkApp(sessionCtx);
+
+    const response = await postSpeech(app, {
+      voice: "voice-1",
+      start: 0,
+      contentVersion: "sha256:u",
+    });
+
+    expect(response.status).toBe(200);
+    const header = response.headers.get("X-Speech-Text");
+    expect(header).not.toBeNull();
+    expect(Buffer.from(header!, "base64url").toString("utf8")).toBe(content);
   });
 
   it("iterates long Unicode text in 1000-codepoint chunks", async () => {

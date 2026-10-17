@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { FullPageSpinner } from "@/components/ui/full-page-spinner";
 import { Separator } from "@/components/ui/separator";
 import { useSession } from "@/lib/auth/client";
+import { useReadAloud } from "@/lib/hooks/useReadAloud";
 import { useReaderSettings } from "@/lib/readerSettings";
 import { useQuery } from "@tanstack/react-query";
 import { HighlighterIcon as Highlight, Printer, X } from "lucide-react";
@@ -40,6 +41,7 @@ export default function ReaderViewPage() {
   const [showHighlights, setShowHighlights] = useState(false);
   const isOwner = session?.user?.id === bookmark?.userId;
   const canReadAloud = isOwner && bookmark?.content.type === BookmarkTypes.LINK;
+  const readAloud = useReadAloud(bookmarkId, canReadAloud);
 
   const onClose = () => {
     if (window.history.length > 1) {
@@ -70,7 +72,7 @@ export default function ReaderViewPage() {
               <Printer className="h-4 w-4" />
             </Button>
 
-            <ReadAloudControls bookmarkId={bookmarkId} enabled={canReadAloud} />
+            <ReadAloudControls readAloud={readAloud} enabled={canReadAloud} />
 
             <ReaderSettingsPopover variant="ghost" />
 
@@ -140,6 +142,7 @@ export default function ReaderViewPage() {
                       bookmarkId={bookmarkId}
                       readOnly={!isOwner}
                       progressBarStyle={{ position: "fixed", top: "3.5rem" }}
+                      speechText={readAloud.snapshot.currentText}
                     />
                   </div>
                 </Suspense>

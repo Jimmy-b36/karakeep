@@ -28,16 +28,15 @@ import { READ_ALOUD_SPEEDS, useReadAloud } from "@/lib/hooks/useReadAloud";
 import type { ReadAloudErrorCode } from "@/lib/read-aloud";
 
 interface ReadAloudControlsProps {
-  bookmarkId: string;
+  readAloud: ReturnType<typeof useReadAloud>;
   enabled: boolean;
 }
 
 export default function ReadAloudControls({
-  bookmarkId,
+  readAloud,
   enabled,
 }: ReadAloudControlsProps) {
   const { t } = useTranslation();
-  const readAloud = useReadAloud(bookmarkId, enabled);
   const [open, setOpen] = useState(false);
 
   if (!enabled) {

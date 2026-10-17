@@ -59,6 +59,7 @@ export function useReadAloud(bookmarkId: string, enabled: boolean) {
   const [snapshot, setSnapshot] = useState<ReadAloudSnapshot>({
     status: "idle",
     error: null,
+    currentText: null,
   });
   const [voices, setVoices] = useState<SpeechVoice[]>([]);
   const [voicesStatus, setVoicesStatus] = useState<VoicesStatus>("idle");
@@ -103,7 +104,7 @@ export function useReadAloud(bookmarkId: string, enabled: boolean) {
   // playback and clears the previous session's UI state.
   useEffect(() => {
     if (!enabled) {
-      setSnapshot({ status: "idle", error: null });
+      setSnapshot({ status: "idle", error: null, currentText: null });
     }
   }, [enabled]);
 

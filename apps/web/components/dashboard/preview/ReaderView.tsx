@@ -1,8 +1,10 @@
 import { FullPageSpinner } from "@/components/ui/full-page-spinner";
 import { toast } from "@/components/ui/sonner";
 import { useTranslation } from "@/lib/i18n/client";
+import { useSpeechHighlight } from "@/lib/hooks/useSpeechHighlight";
 import { useQuery } from "@tanstack/react-query";
 import { FileX } from "lucide-react";
+import { useRef } from "react";
 
 import BookmarkHTMLHighlighter from "@karakeep/shared-react/components/BookmarkHtmlHighlighter";
 import ScrollProgressTracker from "@karakeep/shared-react/components/ScrollProgressTracker";
@@ -23,15 +25,19 @@ export default function ReaderView({
   style,
   readOnly,
   progressBarStyle,
+  speechText,
 }: {
   bookmarkId: string;
   className?: string;
   style?: React.CSSProperties;
   readOnly: boolean;
   progressBarStyle?: React.CSSProperties;
+  speechText?: string | null;
 }) {
   const { t } = useTranslation();
   const api = useTRPC();
+  const speechHighlightRef = useRef<HTMLDivElement>(null);
+  useSpeechHighlight(speechHighlightRef, speechText);
   const { data: highlights } = useQuery(
     api.highlights.getForBookmark.queryOptions({
       bookmarkId,
@@ -149,35 +155,37 @@ export default function ReaderView({
             onDismiss={onDismiss}
           />
         )}
-        <BookmarkHTMLHighlighter
-          className={className}
-          style={style}
-          htmlContent={cachedContent || ""}
-          highlights={highlights?.highlights ?? []}
-          readOnly={readOnly}
-          onDeleteHighlight={(h) =>
-            deleteHighlight({
-              highlightId: h.id,
-            })
-          }
-          onUpdateHighlight={(h) =>
-            updateHighlight({
-              highlightId: h.id,
-              color: h.color,
-              note: h.note,
-            })
-          }
-          onHighlight={(h) =>
-            createHighlight({
-              startOffset: h.startOffset,
-              endOffset: h.endOffset,
-              color: h.color,
-              bookmarkId,
-              text: h.text,
-              note: h.note ?? null,
-            })
-          }
-        />
+        <div ref={speechHighlightRef}>
+          <BookmarkHTMLHighlighter
+            className={className}
+            style={style}
+            htmlContent={cachedContent || ""}
+            highlights={highlights?.highlights ?? []}
+            readOnly={readOnly}
+            onDeleteHighlight={(h) =>
+              deleteHighlight({
+                highlightId: h.id,
+              })
+            }
+            onUpdateHighlight={(h) =>
+              updateHighlight({
+                highlightId: h.id,
+                color: h.color,
+                note: h.note,
+              })
+            }
+            onHighlight={(h) =>
+              createHighlight({
+                startOffset: h.startOffset,
+                endOffset: h.endOffset,
+                color: h.color,
+                bookmarkId,
+                text: h.text,
+                note: h.note ?? null,
+              })
+            }
+          />
+        </div>
       </ScrollProgressTracker>
     );
   }

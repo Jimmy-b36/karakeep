@@ -25,8 +25,9 @@ function chunk(
   next: number | null,
   contentVersion: string,
   range = "0-10/10",
+  text?: string,
 ): SpeechChunk {
-  return { blob: new Blob(["audio"]), next, contentVersion, range };
+  return { blob: new Blob(["audio"]), next, contentVersion, range, text };
 }
 
 function createFakeAudio() {
@@ -182,6 +183,53 @@ describe("ReadAloudPlayer", () => {
     expect(play).toHaveBeenCalledTimes(2);
   });
 
+  it("sets currentText when a chunk starts playing", async () => {
+    const { player, fetchChunk } = setupPlayer();
+
+    const pending = deferred<SpeechChunk>();
+    fetchChunk.mockReturnValueOnce(pending.promise);
+
+    player.start();
+    pending.resolve(chunk(100, "v1", "0-100/300", "Hello world"));
+    await flush();
+
+    expect(player.currentSnapshot.status).toBe("playing");
+    expect(player.currentSnapshot.currentText).toBe("Hello world");
+  });
+
+  it("clears currentText on stop", async () => {
+    const { player, fetchChunk } = setupPlayer();
+
+    const pending = deferred<SpeechChunk>();
+    fetchChunk.mockReturnValueOnce(pending.promise);
+
+    player.start();
+    pending.resolve(chunk(100, "v1", "0-100/300", "Hello world"));
+    await flush();
+    expect(player.currentSnapshot.currentText).toBe("Hello world");
+
+    player.stop();
+    expect(player.currentSnapshot.currentText).toBeNull();
+  });
+
+  it("clears currentText when the stream ends", async () => {
+    const { player, audio, fetchChunk } = setupPlayer();
+
+    const pending = deferred<SpeechChunk>();
+    fetchChunk.mockReturnValueOnce(pending.promise);
+
+    player.start();
+    pending.resolve(chunk(null, "v1", "0-10/10", "Hello world"));
+    await flush();
+    expect(player.currentSnapshot.currentText).toBe("Hello world");
+
+    audio.onended!(new Event("ended"));
+    await flush();
+
+    expect(player.currentSnapshot.status).toBe("idle");
+    expect(player.currentSnapshot.currentText).toBeNull();
+  });
+
   it("fails with restart when a later chunk reports a new content version", async () => {
     const { player, audio, fetchChunk, createObjectURL } = setupPlayer();
 
@@ -262,6 +310,84 @@ describe("fetchSpeechChunk", () => {
     });
 
     expect(result.next).toBeNull();
+  });
+
+  it("decodes the X-Speech-Text header as UTF-8 base64url text", async () => {
+    const text = "Héllo wörld — unicode 😀";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(new Blob(["audio"]), {
+          status: 200,
+          headers: {
+            "Content-Type": "audio/wav",
+            "X-Speech-Next": "",
+            "X-Speech-Content-Version": "v1",
+            "X-Speech-Text": Buffer.from(text, "utf8").toString("base64url"),
+          },
+        }),
+      ),
+    );
+
+    const result = await fetchSpeechChunk({
+      bookmarkId: "bookmark-1",
+      voice: "voice-a",
+      start: 0,
+      signal: new AbortController().signal,
+    });
+
+    expect(result.text).toBe(text);
+  });
+
+  it("tolerates a missing X-Speech-Text header", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(new Blob(["audio"]), {
+          status: 200,
+          headers: {
+            "Content-Type": "audio/wav",
+            "X-Speech-Next": "",
+            "X-Speech-Content-Version": "v1",
+          },
+        }),
+      ),
+    );
+
+    const result = await fetchSpeechChunk({
+      bookmarkId: "bookmark-1",
+      voice: "voice-a",
+      start: 0,
+      signal: new AbortController().signal,
+    });
+
+    expect(result.text).toBeUndefined();
+  });
+
+  it("tolerates an invalid X-Speech-Text header", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(new Blob(["audio"]), {
+          status: 200,
+          headers: {
+            "Content-Type": "audio/wav",
+            "X-Speech-Next": "",
+            "X-Speech-Content-Version": "v1",
+            "X-Speech-Text": "not!base64",
+          },
+        }),
+      ),
+    );
+
+    const result = await fetchSpeechChunk({
+      bookmarkId: "bookmark-1",
+      voice: "voice-a",
+      start: 0,
+      signal: new AbortController().signal,
+    });
+
+    expect(result.text).toBeUndefined();
   });
 
   it.each<{ name: string; headers: Record<string, string> }>([

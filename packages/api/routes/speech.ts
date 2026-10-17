@@ -179,6 +179,10 @@ export const speechBookmarkRoutes = new Hono()
     );
     c.header("X-Speech-Next", chunk.truncated ? String(chunk.range.end) : "");
     c.header("X-Speech-Content-Version", readable.contentVersion);
+    c.header(
+      "X-Speech-Text",
+      Buffer.from(chunk.content, "utf8").toString("base64url"),
+    );
     // Copy exact bytes: Buffer is Uint8Array<ArrayBufferLike>, not Hono's Data.
     return c.body(new Uint8Array(audio), 200);
   })
