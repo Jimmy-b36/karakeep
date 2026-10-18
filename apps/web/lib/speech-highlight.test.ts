@@ -24,6 +24,29 @@ beforeEach(() => {
 });
 
 describe("applySpeechHighlight", () => {
+  it("does not insert spaces inside inline-split words", () => {
+    const container = createContainer(
+      "<p>Read <strong>high</strong>lighting now.</p>",
+    );
+    applySpeechHighlight(container, "Read highlighting now.");
+    expect(highlightedSpan(container)).not.toBeNull();
+    applySpeechHighlight(container, null);
+    expect(container.innerHTML).toBe(
+      "<p>Read <strong>high</strong>lighting now.</p>",
+    );
+  });
+
+  it("preserves paragraph structure and saved highlights across blocks", () => {
+    const html =
+      '<p>First <span data-highlight="true">saved</span> sentence.</p><p>Second sentence.</p>';
+    const container = createContainer(html);
+    applySpeechHighlight(container, "First saved sentence. Second sentence.");
+    expect(highlightedSpan(container)).not.toBeNull();
+    expect(container.querySelectorAll("p")).toHaveLength(2);
+    expect(container.querySelector("[data-speech-highlight] p")).toBeNull();
+    applySpeechHighlight(container, null);
+    expect(container.innerHTML).toBe(html);
+  });
   it("matches text despite inter-tag and newline whitespace differences", () => {
     const container = createContainer(
       "<p>Hello <strong>world</strong>\n  again</p>",
@@ -34,7 +57,11 @@ describe("applySpeechHighlight", () => {
     const span = highlightedSpan(container);
     expect(span).not.toBeNull();
     expect(container.textContent).toBe("Hello world\n  again");
-    expect(span!.textContent).toBe("Hello world\n  again");
+    expect(
+      Array.from(container.querySelectorAll("[data-speech-highlight]"))
+        .map((element) => element.textContent)
+        .join(""),
+    ).toBe("Hello world\n  again");
   });
 
   it("clears the prior span when the text changes", () => {

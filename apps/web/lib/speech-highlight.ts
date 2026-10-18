@@ -32,6 +32,7 @@ function buildNormalizedText(container: HTMLElement): NormalizedText {
   const positions: RawPosition[] = [];
   let pendingSpace = false;
   let spacePosition: RawPosition | null = null;
+  let previousBlock: Element | null = null;
 
   const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, {
     acceptNode(node) {
@@ -48,6 +49,15 @@ function buildNormalizedText(container: HTMLElement): NormalizedText {
 
   let node: Text | null;
   while ((node = walker.nextNode() as Text | null)) {
+    const block =
+      node.parentElement?.closest(
+        "p,div,li,h1,h2,h3,h4,h5,h6,blockquote,pre,td,th",
+      ) ?? null;
+    if (previousBlock && block !== previousBlock) {
+      pendingSpace = true;
+      spacePosition = null;
+    }
+    previousBlock = block;
     const data = node.data;
     for (let index = 0; index < data.length; index++) {
       const character = data[index]!;
@@ -67,7 +77,6 @@ function buildNormalizedText(container: HTMLElement): NormalizedText {
       parts.push(character);
       positions.push({ node, offset: index });
     }
-    pendingSpace = true;
   }
 
   return { text: parts.join(""), positions };
@@ -79,29 +88,36 @@ function highlightRange(
   start: number,
   end: number,
 ): void {
-  const startPosition = normalized.positions[start]!;
-  const endPosition =
-    end < normalized.positions.length
-      ? normalized.positions[end]!
-      : (() => {
-          const last = normalized.positions[end - 1]!;
-          return { node: last.node, offset: last.offset + 1 };
-        })();
+  const segments = new Map<Text, { start: number; end: number }>();
+  for (const position of normalized.positions.slice(start, end)) {
+    const segment = segments.get(position.node);
+    if (segment) {
+      segment.end = position.offset + 1;
+    } else {
+      segments.set(position.node, {
+        start: position.offset,
+        end: position.offset + 1,
+      });
+    }
+  }
 
-  const range = document.createRange();
-  range.setStart(startPosition.node, startPosition.offset);
-  range.setEnd(endPosition.node, endPosition.offset);
-
-  const span = document.createElement("span");
-  span.setAttribute("data-speech-highlight", "true");
-  span.style.background = "rgba(250,204,21,0.35)";
-  span.style.borderRadius = "2px";
-  span.style.transition = "background-color 150ms";
-  span.appendChild(range.extractContents());
-  range.insertNode(span);
+  let firstSpan: HTMLSpanElement | null = null;
+  // Wrap text nodes separately: extracting a cross-block Range splits paragraphs.
+  for (const [original, segment] of segments) {
+    let node = original;
+    if (segment.end < node.length) node.splitText(segment.end);
+    if (segment.start > 0) node = node.splitText(segment.start);
+    const span = document.createElement("span");
+    span.setAttribute("data-speech-highlight", "true");
+    span.style.background = "rgba(250,204,21,0.6)";
+    span.style.borderRadius = "2px";
+    node.replaceWith(span);
+    span.appendChild(node);
+    firstSpan ??= span;
+  }
 
   try {
-    span.scrollIntoView({ block: "nearest" });
+    firstSpan?.scrollIntoView({ block: "nearest" });
   } catch {
     // scrollIntoView is unavailable in some test environments.
   }

@@ -17,6 +17,7 @@ const compiledSpeechConvert = compile({
     { selector: "h5", options: { uppercase: false } },
     { selector: "h6", options: { uppercase: false } },
     { selector: "ul", options: { itemPrefix: " " } },
+    { selector: "ol", format: "unorderedList", options: { itemPrefix: " " } },
   ],
 });
 
