@@ -1,5 +1,6 @@
 import { TRPCError } from "@trpc/server";
 import { Hono } from "hono";
+import { createHash } from "node:crypto";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Context } from "@karakeep/trpc";
@@ -114,11 +115,18 @@ function buildBookmarkApp(ctx: Context) {
     .route("/bookmarks", speechBookmarkRoutes);
 }
 
+function speechVersionFor(text: string): string {
+  return `sha256:${createHash("sha256")
+    .update("text")
+    .update("\0")
+    .update(text)
+    .digest("hex")}`;
+}
+
 function fakeBookmark(overrides?: {
   ensureOwnershipError?: TRPCError;
   type?: "link" | "text" | "asset";
-  content?: string;
-  contentVersion?: string;
+  htmlContent?: string;
 }) {
   const bookmark = {
     ensureOwnership: vi.fn(() => {
@@ -126,12 +134,15 @@ function fakeBookmark(overrides?: {
         throw overrides.ensureOwnershipError;
       }
     }),
-    asReadableContent: vi.fn(() => ({
-      bookmarkId: "bm1",
-      bookmarkType: overrides?.type ?? "link",
-      format: "text" as const,
-      content: overrides?.content ?? "Hello world.",
-      contentVersion: overrides?.contentVersion ?? "sha256:abc",
+    asZBookmark: vi.fn(() => ({
+      id: "bm1",
+      content:
+        overrides?.type && overrides.type !== "link"
+          ? { type: overrides.type }
+          : {
+              type: "link" as const,
+              htmlContent: overrides?.htmlContent ?? "Hello world.",
+            },
     })),
   };
   bookmarkFromIdMock.mockResolvedValue(bookmark);
@@ -351,7 +362,7 @@ describe("POST /bookmarks/:bookmarkId/speech", () => {
     expect(await response.json()).toEqual({
       error: "You do not have access to this bookmark.",
     });
-    expect(bookmark.asReadableContent).not.toHaveBeenCalled();
+    expect(bookmark.asZBookmark).not.toHaveBeenCalled();
     expect(synthesizeSpeechMock).not.toHaveBeenCalled();
   });
 
@@ -380,7 +391,7 @@ describe("POST /bookmarks/:bookmarkId/speech", () => {
   });
 
   it("rejects empty readable content with 422", async () => {
-    fakeBookmark({ content: "   " });
+    fakeBookmark({ htmlContent: "   " });
     const app = buildBookmarkApp(sessionCtx);
 
     const response = await postSpeech(app, { voice: "voice-1" });
@@ -410,11 +421,32 @@ describe("POST /bookmarks/:bookmarkId/speech", () => {
     expect(synthesizeSpeechMock).not.toHaveBeenCalled();
   });
 
-  it("returns 409 on content-version mismatch before synthesis", async () => {
-    const bookmark = fakeBookmark({
-      content: "Hello world.",
-      contentVersion: "sha256:new",
+  it("renders LINK HTML as DOM-matching speech text", async () => {
+    fakeBookmark({
+      htmlContent:
+        '<a href="https://x.com">link text</a>' +
+        "<h2>Heading</h2>" +
+        "<ul><li>item</li></ul>",
     });
+    synthesizeSpeechMock.mockResolvedValue(Buffer.from("RIFFxxxxWAVEyyyy"));
+    const app = buildBookmarkApp(sessionCtx);
+
+    const response = await postSpeech(app, { voice: "voice-1", start: 0 });
+
+    expect(response.status).toBe(200);
+    const header = response.headers.get("X-Speech-Text");
+    expect(header).not.toBeNull();
+    const text = Buffer.from(header!, "base64url").toString("utf8");
+    expect(text).toContain("link text");
+    expect(text).not.toContain("https://x.com");
+    expect(text).toContain("Heading");
+    expect(text).not.toContain("HEADING");
+    expect(text).toContain("item");
+    expect(text).not.toContain("*");
+  });
+
+  it("returns 409 on content-version mismatch before synthesis", async () => {
+    const bookmark = fakeBookmark({ htmlContent: "Hello world." });
     const app = buildBookmarkApp(sessionCtx);
 
     const response = await postSpeech(app, {
@@ -427,26 +459,29 @@ describe("POST /bookmarks/:bookmarkId/speech", () => {
     expect(await response.json()).toEqual({
       error: "The bookmark content changed. Restart read-aloud.",
     });
-    expect(bookmark.asReadableContent).toHaveBeenCalledOnce();
+    expect(bookmark.asZBookmark).toHaveBeenCalledOnce();
     expect(synthesizeSpeechMock).not.toHaveBeenCalled();
   });
 
   it("synthesizes a chunk and returns WAV with range headers", async () => {
     const content = "a".repeat(1200);
-    fakeBookmark({ content, contentVersion: "sha256:c" });
+    const contentVersion = speechVersionFor(content);
+    fakeBookmark({ htmlContent: content });
     synthesizeSpeechMock.mockResolvedValue(Buffer.from("RIFFxxxxWAVEyyyy"));
     const app = buildBookmarkApp(sessionCtx);
 
     const response = await postSpeech(app, {
       voice: "voice-1",
       start: 0,
-      contentVersion: "sha256:c",
+      contentVersion,
     });
 
     expect(response.status).toBe(200);
     expect(response.headers.get("Content-Type")).toBe("audio/wav");
     expect(response.headers.get("Cache-Control")).toBe("private, no-store");
-    expect(response.headers.get("X-Speech-Content-Version")).toBe("sha256:c");
+    expect(response.headers.get("X-Speech-Content-Version")).toBe(
+      contentVersion,
+    );
     expect(response.headers.get("X-Speech-Range")).toBe("0-1000/1200");
     expect(response.headers.get("X-Speech-Next")).toBe("1000");
     expect(synthesizeSpeechMock).toHaveBeenCalledOnce();
@@ -461,14 +496,14 @@ describe("POST /bookmarks/:bookmarkId/speech", () => {
 
   it("returns the chunk text as a UTF-8 base64url header", async () => {
     const content = "Héllo wörld — unicode 😀";
-    fakeBookmark({ content, contentVersion: "sha256:u" });
+    fakeBookmark({ htmlContent: content });
     synthesizeSpeechMock.mockResolvedValue(Buffer.from("RIFFxxxxWAVEyyyy"));
     const app = buildBookmarkApp(sessionCtx);
 
     const response = await postSpeech(app, {
       voice: "voice-1",
       start: 0,
-      contentVersion: "sha256:u",
+      contentVersion: speechVersionFor(content),
     });
 
     expect(response.status).toBe(200);
@@ -479,7 +514,8 @@ describe("POST /bookmarks/:bookmarkId/speech", () => {
 
   it("iterates long Unicode text in 1000-codepoint chunks", async () => {
     const content = "😀".repeat(1200) + "b".repeat(1300);
-    fakeBookmark({ content, contentVersion: "sha256:u" });
+    const contentVersion = speechVersionFor(content);
+    fakeBookmark({ htmlContent: content });
     synthesizeSpeechMock.mockResolvedValue(Buffer.from("RIFFxxxxWAVEyyyy"));
     const app = buildBookmarkApp(sessionCtx);
 
@@ -489,7 +525,7 @@ describe("POST /bookmarks/:bookmarkId/speech", () => {
       const response = await postSpeech(app, {
         voice: "voice-1",
         start,
-        contentVersion: "sha256:u",
+        contentVersion,
       });
 
       expect(response.status).toBe(200);
@@ -512,13 +548,15 @@ describe("POST /bookmarks/:bookmarkId/speech", () => {
   });
 
   it("returns 422 for out-of-range offsets without synthesis", async () => {
-    fakeBookmark({ content: "abc", contentVersion: "sha256:c" });
+    const content = "abc";
+    const contentVersion = speechVersionFor(content);
+    fakeBookmark({ htmlContent: content });
     const app = buildBookmarkApp(sessionCtx);
 
     const atEnd = await postSpeech(app, {
       voice: "voice-1",
       start: 3,
-      contentVersion: "sha256:c",
+      contentVersion,
     });
     expect(atEnd.status).toBe(422);
     expect(await atEnd.json()).toEqual({ error: "No more content to read." });
@@ -526,7 +564,7 @@ describe("POST /bookmarks/:bookmarkId/speech", () => {
     const beyondEnd = await postSpeech(app, {
       voice: "voice-1",
       start: 4,
-      contentVersion: "sha256:c",
+      contentVersion,
     });
     expect(beyondEnd.status).toBe(422);
     expect(await beyondEnd.json()).toEqual({

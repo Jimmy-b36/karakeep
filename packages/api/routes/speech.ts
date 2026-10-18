@@ -2,9 +2,11 @@ import { TRPCError } from "@trpc/server";
 import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
+import { createHash } from "node:crypto";
 import { z } from "zod";
 
 import serverConfig from "@karakeep/shared/config";
+import { htmlToSpeechText } from "@karakeep/shared/utils/htmlUtils";
 import {
   getSpeechVoices,
   SpeechBusyError,
@@ -140,17 +142,22 @@ export const speechBookmarkRoutes = new Hono()
     const bookmark = await Bookmark.fromId(c.var.ctx, bookmarkId, true);
     bookmark.ensureOwnership();
 
-    const readable = bookmark.asReadableContent("text");
-    if (readable.bookmarkType !== BookmarkTypes.LINK) {
+    const content = bookmark.asZBookmark().content;
+    if (content.type !== BookmarkTypes.LINK) {
       return c.json({ error: "This bookmark cannot be read aloud." }, 422);
     }
-    if (!readable.content.trim()) {
+    const speechText = htmlToSpeechText(content.htmlContent ?? "")
+      .replace(/\r\n?/g, "\n")
+      .trim();
+    if (!speechText) {
       return c.json({ error: "This bookmark has no readable content." }, 422);
     }
-    if (
-      contentVersion !== undefined &&
-      contentVersion !== readable.contentVersion
-    ) {
+    const speechVersion = `sha256:${createHash("sha256")
+      .update("text")
+      .update("\0")
+      .update(speechText)
+      .digest("hex")}`;
+    if (contentVersion !== undefined && contentVersion !== speechVersion) {
       return c.json(
         { error: "The bookmark content changed. Restart read-aloud." },
         409,
@@ -159,8 +166,8 @@ export const speechBookmarkRoutes = new Hono()
 
     const chunk = chunkReadableContent({
       bookmarkId,
-      content: readable.content,
-      contentVersion: readable.contentVersion,
+      content: speechText,
+      contentVersion: speechVersion,
       format: "text",
       maxChars: SPEECH_CHUNK_MAX_CHARS,
       start,
@@ -178,7 +185,7 @@ export const speechBookmarkRoutes = new Hono()
       `${chunk.range.start}-${chunk.range.end}/${chunk.range.total}`,
     );
     c.header("X-Speech-Next", chunk.truncated ? String(chunk.range.end) : "");
-    c.header("X-Speech-Content-Version", readable.contentVersion);
+    c.header("X-Speech-Content-Version", speechVersion);
     c.header(
       "X-Speech-Text",
       Buffer.from(chunk.content, "utf8").toString("base64url"),
