@@ -1,0 +1,67 @@
+name: Test actual word highlighting in Chromium
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  browser:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          persist-credentials: false
+      - name: Start isolated synthetic stack
+        run: |
+          set -euo pipefail
+          docker network create --internal word-e2e
+          docker run -d --name word-model --network word-e2e --network-alias kokoro --memory 2g --cpus 2 \
+            --cap-drop ALL --security-opt no-new-privileges -e KOKORO_TOKEN=synthetic-word-test-token-000000000000 \
+            ghcr.io/jimmy-b36/karakeep-kokoro@sha256:44baf58dd2ecad9a0ce5b0c2fe945e96c227e53b40381895070ec629915900ef
+          docker run -d --name word-web --network word-e2e --network-alias web --memory 2g --cpus 2 \
+            -e DATA_DIR=/tmp/word-data -e NEXTAUTH_URL=http://web:3000 \
+            -e NEXTAUTH_SECRET=synthetic-word-session-secret-000000000 -e DISABLE_SIGNUPS=false \
+            -e KOKORO_SPEECH_URL=http://kokoro:4320 -e KOKORO_SPEECH_TOKEN=synthetic-word-test-token-000000000000 \
+            -e REEDIT_SPEECH_ALLOW_PRIVATE_HTTP=1 \
+            ghcr.io/jimmy-b36/karakeep-read-aloud@sha256:60a324520446521afd1c5baa90563255efa96567c87d6ae04cde88b917ea1502
+          docker run -d --name word-chrome --network word-e2e --network-alias chrome --memory 768m \
+            ghcr.io/karakeep-app/karakeep-chrome@sha256:c51a8c8e6c3c1040a50fa0ecfd0b2fc298401b4229262636552458151f6f18fa \
+            --disable-gpu --disable-dev-shm-usage --hide-scrollbars --window-size=1280,900 --autoplay-policy=no-user-gesture-required
+          docker run -d --name word-driver --network word-e2e --memory 256m --cap-drop ALL \
+            --security-opt no-new-privileges node:24-bookworm-slim sleep infinity
+          docker cp scripts/e2e-word-highlighting.mjs word-driver:/tmp/test.mjs
+          for i in $(seq 1 60); do
+            if docker exec word-web node -e 'fetch("http://127.0.0.1:3000/api/health").then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))'; then break; fi
+            sleep 2
+          done
+      - name: Create synthetic browser session and article
+        run: |
+          set -euo pipefail
+          docker exec word-driver node /tmp/test.mjs --prepare
+          docker exec -i word-web node - <<'JS'
+          const { DatabaseSync } = require('node:sqlite');
+          const db = new DatabaseSync('/tmp/word-data/db.db');
+          const user = db.prepare('SELECT id FROM user WHERE email = ?').get('word-e2e@example.test');
+          if (!user) throw Error('Synthetic user missing');
+          const now = Math.floor(Date.now()/1000);
+          db.prepare('INSERT INTO bookmarks (id,userId,type,createdAt,lastSavedAt,modifiedAt,title,taggingStatus,summarizationStatus,embeddingStatus) VALUES (?,?,?,?,?,?,?,?,?,?)').run('word-e2e',user.id,'link',now,now,now,'Word timing test','success','success','success');
+          db.prepare('INSERT INTO bookmarkLinks (id,url,title,htmlContent,crawlStatus,readerViewStatus) VALUES (?,?,?,?,?,?)').run('word-e2e','https://example.invalid/synthetic','Word timing test','<p>Read this <strong>sentence</strong> one word at a time.</p><p>Word highlighting runs locally.</p>','success','readable');
+          db.close();
+          JS
+      - name: Verify visible word progression and cleanup
+        run: |
+          set -euo pipefail
+          docker exec word-driver node /tmp/test.mjs
+          mkdir word-evidence
+          docker cp word-driver:/tmp/word-highlighting.png word-evidence/
+          docker cp word-driver:/tmp/word-highlighting.json word-evidence/
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: real-browser-word-highlighting
+          path: word-evidence/
+          retention-days: 7
+      - name: Cleanup synthetic resources
+        if: always()
+        run: |
+          docker rm -f word-web word-model word-chrome word-driver || true
+          docker network rm word-e2e || true
