@@ -22,7 +22,7 @@ jobs:
           docker exec kokoro-eval pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu torch==2.8.0
           docker exec kokoro-eval pip install --no-cache-dir \
             kokoro==0.9.4 'misaki[en]==0.9.4' transformers==4.51.3 \
-            huggingface_hub==0.34.4 numpy==2.2.6 spacy==3.8.7 \
+            huggingface_hub==0.34.4 numpy==2.2.6 spacy==3.8.7 click==8.1.8 \
             https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl
           docker cp scripts/evaluate-kokoro.py kokoro-eval:/tmp/evaluate-kokoro.py
           docker exec --user 65534 --env HOME=/tmp/kokoro-user \
