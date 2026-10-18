@@ -4,6 +4,7 @@ import {
   fetchSpeechChunk,
   fetchSpeechVoices,
   ReadAloudPlayer,
+  ReadAloudError,
 } from "./read-aloud";
 import type { AudioLike, SpeechChunk } from "./read-aloud";
 
@@ -70,6 +71,111 @@ function setupPlayer() {
 }
 
 describe("ReadAloudPlayer", () => {
+  it("discards a prefetched old voice when the voice changes", async () => {
+    const { player, fetchChunk, play } = setupPlayer();
+    const oldNext = deferred<SpeechChunk>();
+    fetchChunk
+      .mockResolvedValueOnce(chunk(100, "v1"))
+      .mockReturnValueOnce(oldNext.promise)
+      .mockResolvedValueOnce(chunk(null, "v1"));
+    player.start();
+    await flush();
+    const oldSignal = fetchChunk.mock.calls[1][0].signal;
+    player.setVoice("voice-b");
+    await flush();
+    expect(oldSignal.aborted).toBe(true);
+    expect(fetchChunk.mock.calls[2][0]).toMatchObject({
+      voice: "voice-b",
+      start: 0,
+    });
+    oldNext.resolve(chunk(null, "v1"));
+    await flush();
+    expect(play).toHaveBeenCalledTimes(2);
+    player.stop();
+  });
+  it("retries a busy prefetch while current audio continues and cancels the retry on stop", async () => {
+    vi.useFakeTimers();
+    try {
+      const { player, fetchChunk } = setupPlayer();
+      fetchChunk
+        .mockResolvedValueOnce(chunk(100, "v1"))
+        .mockRejectedValue(
+          new ReadAloudError({
+            code: "busy",
+            message: "Busy",
+            retryAfterSeconds: 1,
+          }),
+        );
+      player.start();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(player.currentSnapshot.status).toBe("playing");
+      expect(fetchChunk).toHaveBeenCalledTimes(2);
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(fetchChunk).toHaveBeenCalledTimes(3);
+      expect(player.currentSnapshot.status).toBe("playing");
+      player.stop();
+      await vi.advanceTimersByTimeAsync(10000);
+      expect(fetchChunk).toHaveBeenCalledTimes(3);
+      expect(player.currentSnapshot.status).toBe("idle");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+  it("preloads exactly one segment while playing and reuses it at the boundary", async () => {
+    const { player, audio, fetchChunk, createObjectURL } = setupPlayer();
+    fetchChunk
+      .mockResolvedValueOnce(chunk(100, "v1", "0-100/300", "First"))
+      .mockResolvedValueOnce(chunk(200, "v1", "100-200/300", "Second"))
+      .mockResolvedValueOnce(chunk(null, "v1", "200-300/300", "Third"));
+    player.start();
+    await flush();
+    expect(fetchChunk).toHaveBeenCalledTimes(2);
+    expect(player.currentSnapshot.currentText).toBe("First");
+    expect(createObjectURL).toHaveBeenCalledTimes(1);
+    audio.onended!(new Event("ended"));
+    await flush();
+    expect(player.currentSnapshot.currentText).toBe("Second");
+    expect(fetchChunk).toHaveBeenCalledTimes(3);
+    expect(fetchChunk.mock.calls.map(([request]) => request.start)).toEqual([
+      0, 100, 200,
+    ]);
+    player.stop();
+  });
+
+  it("cancels speculative generation on stop without playing its late result", async () => {
+    const { player, fetchChunk, play } = setupPlayer();
+    const next = deferred<SpeechChunk>();
+    fetchChunk
+      .mockResolvedValueOnce(chunk(100, "v1"))
+      .mockReturnValueOnce(next.promise);
+    player.start();
+    await flush();
+    const signal = fetchChunk.mock.calls[1][0].signal;
+    player.stop();
+    expect(signal.aborted).toBe(true);
+    next.resolve(chunk(null, "v1"));
+    await flush();
+    expect(play).toHaveBeenCalledTimes(1);
+    expect(player.currentSnapshot.status).toBe("idle");
+  });
+
+  it("does not interrupt current audio when prefetch fails and retries the next offset", async () => {
+    const { player, audio, fetchChunk } = setupPlayer();
+    fetchChunk
+      .mockResolvedValueOnce(chunk(100, "v1"))
+      .mockRejectedValueOnce(new Error("busy"))
+      .mockResolvedValueOnce(chunk(null, "v1"));
+    player.start();
+    await flush();
+    expect(player.currentSnapshot.status).toBe("playing");
+    audio.onended!(new Event("ended"));
+    await flush();
+    expect(player.currentSnapshot.status).toBe("error");
+    player.retry();
+    await flush();
+    expect(fetchChunk.mock.calls[2][0].start).toBe(100);
+    expect(player.currentSnapshot.status).toBe("playing");
+  });
   it("requests chunks in order, forwarding version and next offset", async () => {
     const {
       player,
@@ -81,7 +187,10 @@ describe("ReadAloudPlayer", () => {
     } = setupPlayer();
 
     const first = deferred<SpeechChunk>();
-    fetchChunk.mockReturnValueOnce(first.promise);
+    const second = deferred<SpeechChunk>();
+    fetchChunk
+      .mockReturnValueOnce(first.promise)
+      .mockReturnValueOnce(second.promise);
 
     player.start();
     expect(player.currentSnapshot.status).toBe("buffering");
@@ -99,8 +208,7 @@ describe("ReadAloudPlayer", () => {
     expect(play).toHaveBeenCalledTimes(1);
     expect(player.currentSnapshot.status).toBe("playing");
 
-    const second = deferred<SpeechChunk>();
-    fetchChunk.mockReturnValueOnce(second.promise);
+    expect(fetchChunk).toHaveBeenCalledTimes(2);
     audio.onended!(new Event("ended"));
     await flush();
 
@@ -234,14 +342,15 @@ describe("ReadAloudPlayer", () => {
     const { player, audio, fetchChunk, createObjectURL } = setupPlayer();
 
     const first = deferred<SpeechChunk>();
-    fetchChunk.mockReturnValueOnce(first.promise);
+    const second = deferred<SpeechChunk>();
+    fetchChunk
+      .mockReturnValueOnce(first.promise)
+      .mockReturnValueOnce(second.promise);
     player.start();
     first.resolve(chunk(100, "v1"));
     await flush();
     expect(player.currentSnapshot.status).toBe("playing");
 
-    const second = deferred<SpeechChunk>();
-    fetchChunk.mockReturnValueOnce(second.promise);
     audio.onended!(new Event("ended"));
     await flush();
     second.resolve(chunk(null, "v2"));

@@ -297,6 +297,10 @@ export class ReadAloudPlayer {
   private readonly audio: AudioLike;
   private session = 0;
   private controller: AbortController | null = null;
+  private prefetched: {
+    start: number;
+    result: Promise<{ chunk: SpeechChunk } | { error: unknown }>;
+  } | null = null;
   private objectUrl: string | null = null;
   private version: string | null = null;
   private currentStart = 0;
@@ -394,6 +398,7 @@ export class ReadAloudPlayer {
     this.session++;
     this.controller?.abort();
     this.controller = null;
+    this.prefetched = null;
     this.sessionActive = false;
     this.version = null;
     this.currentStart = 0;
@@ -434,17 +439,18 @@ export class ReadAloudPlayer {
       return;
     }
     this.emit({ status: "buffering", error: null });
-    const controller = new AbortController();
-    this.controller = controller;
     const start = this.currentStart;
+    const prefetched = this.prefetched;
+    this.prefetched = null;
     try {
-      const chunk = await this.deps.fetchChunk({
-        bookmarkId: this.bookmarkId,
-        voice: this.voice,
-        start,
-        contentVersion: this.version ?? undefined,
-        signal: controller.signal,
-      });
+      let chunk: SpeechChunk;
+      if (prefetched?.start === start) {
+        const result = await prefetched.result;
+        if ("error" in result) throw result.error;
+        chunk = result.chunk;
+      } else {
+        chunk = await this.fetchAt(start);
+      }
       if (token !== this.session) {
         return;
       }
@@ -478,6 +484,7 @@ export class ReadAloudPlayer {
       }
       this.currentText = chunk.text ?? null;
       this.emit({ status: "playing", error: null });
+      this.prefetchNext();
     } catch (error) {
       if (token !== this.session) {
         return;
@@ -487,6 +494,62 @@ export class ReadAloudPlayer {
       }
       this.fail(error instanceof ReadAloudError ? error.info : NETWORK_ERROR);
     }
+  }
+
+  private async fetchAt(start: number): Promise<SpeechChunk> {
+    const controller = new AbortController();
+    this.controller = controller;
+    const request = {
+      bookmarkId: this.bookmarkId,
+      voice: this.voice,
+      start,
+      contentVersion: this.version ?? undefined,
+      signal: controller.signal,
+    };
+    for (let attempt = 0; ; attempt++) {
+      controller.signal.throwIfAborted();
+      try {
+        return await this.deps.fetchChunk(request);
+      } catch (error) {
+        if (
+          !(error instanceof ReadAloudError) ||
+          error.info.code !== "busy" ||
+          attempt >= 3
+        )
+          throw error;
+        await new Promise<void>((resolve, reject) => {
+          const finish = () => {
+            controller.signal.removeEventListener("abort", abort);
+            resolve();
+          };
+          const abort = () => {
+            clearTimeout(timer);
+            controller.signal.removeEventListener("abort", abort);
+            reject(controller.signal.reason);
+          };
+          const delay = Math.min(
+            5,
+            Math.max(1, error.info.retryAfterSeconds ?? 1),
+          );
+          const timer = setTimeout(finish, delay * 1000);
+          controller.signal.addEventListener("abort", abort, { once: true });
+          if (controller.signal.aborted) abort();
+        });
+      }
+    }
+  }
+
+  private prefetchNext(): void {
+    if (!this.sessionActive || this.nextOffset === null || this.prefetched)
+      return;
+    this.prefetched = {
+      start: this.nextOffset,
+      // A speculative failure is shown only when this audio is actually needed.
+      result: this.fetchAt(this.nextOffset).then(
+        (chunk) => ({ chunk }),
+        (error: unknown) => ({ error }),
+      ),
+    };
   }
 
   private handleEnded(token: number): void {
@@ -530,5 +593,6 @@ export class ReadAloudPlayer {
       return;
     }
     this.emit({ status: "playing", error: null });
+    this.prefetchNext();
   }
 }
