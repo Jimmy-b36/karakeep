@@ -2,6 +2,9 @@
 // Audio is synthesized by the Karakeep speech worker behind same-origin API
 // routes; this module never uses browser speech synthesis or cloud fallbacks.
 
+import { zTimedSpeech, validSpeechWords } from "@karakeep/shared/types/speech";
+import type { SpeechWord } from "@karakeep/shared/types/speech";
+
 export interface SpeechVoice {
   id: string;
   name: string;
@@ -44,6 +47,7 @@ export interface SpeechChunk {
   contentVersion: string;
   range: string;
   text?: string;
+  words?: SpeechWord[];
 }
 
 export interface SpeechChunkRequest {
@@ -175,6 +179,35 @@ export async function fetchSpeechChunk(
   }
 
   const contentType = response.headers.get("Content-Type") ?? "";
+  if (contentType.toLowerCase().startsWith("application/json")) {
+    try {
+      const value = zTimedSpeech.parse(await response.json());
+      const text = decodeSpeechText(response.headers.get("X-Speech-Text"));
+      if (!text || !validSpeechWords(value.words, text, value.duration))
+        throw new Error("Invalid words");
+      if (!/^[A-Za-z0-9+/]+={0,2}$/.test(value.audio))
+        throw new Error("Invalid encoding");
+      const binary = atob(value.audio);
+      const bytes = Uint8Array.from(binary, (character) =>
+        character.charCodeAt(0),
+      );
+      if (binary.slice(0, 4) !== "RIFF" || binary.slice(8, 12) !== "WAVE")
+        throw new Error("Invalid WAV");
+      return {
+        blob: new Blob([bytes], { type: "audio/wav" }),
+        words: value.words,
+        text,
+        next,
+        contentVersion: versionHeader,
+        range: response.headers.get("X-Speech-Range") ?? "",
+      };
+    } catch {
+      throw new ReadAloudError({
+        code: "protocol",
+        message: "The local speech response contains invalid word timings.",
+      });
+    }
+  }
   if (!contentType.toLowerCase().startsWith("audio/")) {
     throw new ReadAloudError({
       code: "protocol",
@@ -257,10 +290,12 @@ export interface ReadAloudSnapshot {
   status: ReadAloudStatus;
   error: ReadAloudErrorInfo | null;
   currentText: string | null;
+  currentWord?: SpeechWord | null;
 }
 
 export interface AudioLike {
   playbackRate: number;
+  currentTime?: number;
   src: string;
   onended: ((event: Event) => void) | null;
   onerror: ((event: Event) => void) | null;
@@ -307,6 +342,9 @@ export class ReadAloudPlayer {
   private nextOffset: number | null = 0;
   private sessionActive = false;
   private currentText: string | null = null;
+  private loadedText: string | null = null;
+  private words: SpeechWord[] = [];
+  private currentWord: SpeechWord | null = null;
   private snapshot: ReadAloudSnapshot = {
     status: "idle",
     error: null,
@@ -326,6 +364,22 @@ export class ReadAloudPlayer {
 
   get currentSnapshot(): ReadAloudSnapshot {
     return this.snapshot;
+  }
+
+  updateProgress(): void {
+    if (
+      !this.sessionActive ||
+      !this.words.length ||
+      this.snapshot.status !== "playing"
+    )
+      return;
+    const time = this.audio.currentTime ?? 0;
+    const word =
+      this.words.find((value) => time >= value.start && time < value.end) ??
+      null;
+    if (word === this.currentWord) return;
+    this.currentWord = word;
+    this.emit({ status: "playing", error: null });
   }
 
   start(): void {
@@ -412,6 +466,9 @@ export class ReadAloudPlayer {
       this.deps.revokeObjectURL(this.objectUrl);
       this.objectUrl = null;
     }
+    this.words = [];
+    this.loadedText = null;
+    this.currentWord = null;
     this.audio.onended = null;
     this.audio.onerror = null;
     this.audio.pause();
@@ -423,7 +480,11 @@ export class ReadAloudPlayer {
     if (this.disposed) {
       return;
     }
-    this.snapshot = { ...snapshot, currentText: this.currentText };
+    this.snapshot = {
+      ...snapshot,
+      currentText: this.currentText,
+      currentWord: this.words.length ? this.currentWord : undefined,
+    };
     this.deps.onSnapshot(this.snapshot);
   }
 
@@ -431,6 +492,7 @@ export class ReadAloudPlayer {
     this.controller?.abort();
     this.controller = null;
     this.currentText = null;
+    this.currentWord = null;
     this.emit({ status: "error", error });
   }
 
@@ -466,6 +528,9 @@ export class ReadAloudPlayer {
       this.audio.onerror = () => this.handleAudioError(token);
       this.audio.src = this.objectUrl;
       this.audio.playbackRate = this.speed;
+      this.loadedText = chunk.text ?? null;
+      this.words = chunk.words ?? [];
+      this.currentWord = null;
 
       try {
         await this.audio.play();
@@ -482,8 +547,9 @@ export class ReadAloudPlayer {
       if (token !== this.session) {
         return;
       }
-      this.currentText = chunk.text ?? null;
+      this.currentText = this.loadedText;
       this.emit({ status: "playing", error: null });
+      this.updateProgress();
       this.prefetchNext();
     } catch (error) {
       if (token !== this.session) {
@@ -564,6 +630,7 @@ export class ReadAloudPlayer {
       this.emit({ status: "idle", error: null });
       return;
     }
+    this.currentText = null;
     this.currentStart = next;
     void this.playNext(token);
   }
@@ -592,7 +659,9 @@ export class ReadAloudPlayer {
     if (token !== this.session) {
       return;
     }
+    this.currentText = this.loadedText;
     this.emit({ status: "playing", error: null });
+    this.updateProgress();
     this.prefetchNext();
   }
 }

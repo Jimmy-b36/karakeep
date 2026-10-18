@@ -38,6 +38,7 @@ function createFakeAudio() {
   const removeAttribute = vi.fn();
   const audio: AudioLike = {
     playbackRate: 1,
+    currentTime: 0,
     src: "",
     onended: null,
     onerror: null,
@@ -71,6 +72,36 @@ function setupPlayer() {
 }
 
 describe("ReadAloudPlayer", () => {
+  it("highlights words by audio time, including seek, pause and silence", async () => {
+    const { player, audio, fetchChunk } = setupPlayer();
+    const words = [
+      { from: 0, to: 5, start: 0, end: 0.5 },
+      { from: 6, to: 11, start: 0.7, end: 1.2 },
+    ];
+    fetchChunk.mockResolvedValueOnce({
+      ...chunk(null, "v1", "0-11/11", "Hello world"),
+      words,
+    });
+    player.start();
+    await flush();
+    expect(player.currentSnapshot.currentWord).toEqual(words[0]);
+    audio.currentTime = 0.8;
+    player.updateProgress();
+    expect(player.currentSnapshot.currentWord).toEqual(words[1]);
+    player.pause();
+    audio.currentTime = 0.1;
+    player.updateProgress();
+    expect(player.currentSnapshot.currentWord).toEqual(words[1]);
+    player.resume();
+    await flush();
+    player.updateProgress();
+    expect(player.currentSnapshot.currentWord).toEqual(words[0]);
+    audio.currentTime = 0.6;
+    player.updateProgress();
+    expect(player.currentSnapshot.currentWord).toBeNull();
+    player.stop();
+    expect(player.currentSnapshot.currentWord).toBeUndefined();
+  });
   it("discards a prefetched old voice when the voice changes", async () => {
     const { player, fetchChunk, play } = setupPlayer();
     const oldNext = deferred<SpeechChunk>();
@@ -97,15 +128,13 @@ describe("ReadAloudPlayer", () => {
     vi.useFakeTimers();
     try {
       const { player, fetchChunk } = setupPlayer();
-      fetchChunk
-        .mockResolvedValueOnce(chunk(100, "v1"))
-        .mockRejectedValue(
-          new ReadAloudError({
-            code: "busy",
-            message: "Busy",
-            retryAfterSeconds: 1,
-          }),
-        );
+      fetchChunk.mockResolvedValueOnce(chunk(100, "v1")).mockRejectedValue(
+        new ReadAloudError({
+          code: "busy",
+          message: "Busy",
+          retryAfterSeconds: 1,
+        }),
+      );
       player.start();
       await vi.advanceTimersByTimeAsync(0);
       expect(player.currentSnapshot.status).toBe("playing");
@@ -363,6 +392,38 @@ describe("ReadAloudPlayer", () => {
 });
 
 describe("fetchSpeechChunk", () => {
+  it("reads Kokoro WAV and validated word offsets from JSON", async () => {
+    const text = "Hello";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            audio: Buffer.from("RIFF0000WAVE").toString("base64"),
+            duration: 1,
+            words: [{ from: 0, to: 5, start: 0, end: 0.8 }],
+          }),
+          {
+            headers: {
+              "Content-Type": "application/json",
+              "X-Speech-Next": "",
+              "X-Speech-Content-Version": "v1",
+              "X-Speech-Text": Buffer.from(text).toString("base64url"),
+            },
+          },
+        ),
+      ),
+    );
+    const result = await fetchSpeechChunk({
+      bookmarkId: "b1",
+      voice: "kokoro:af_heart",
+      start: 0,
+      signal: new AbortController().signal,
+    });
+    expect(result.words).toEqual([{ from: 0, to: 5, start: 0, end: 0.8 }]);
+    expect(result.blob.type).toBe("audio/wav");
+    expect(result.text).toBe(text);
+  });
   afterEach(() => {
     vi.unstubAllGlobals();
   });

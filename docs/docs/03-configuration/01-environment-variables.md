@@ -276,6 +276,14 @@ Karakeep can read saved articles aloud by talking to a private [Reedit-compatibl
 | REEDIT_SPEECH_TOKEN                 | No       | Not set | Bearer token used to authenticate server-to-server requests to the speech worker. This is a secret; it is never sent to browsers.                                                                                                   |
 | REEDIT_SPEECH_ALLOW_PRIVATE_HTTP    | No       | false   | The worker URL must use HTTPS. HTTP is allowed only for `127.0.0.1`/`localhost`, or for a private bridge (e.g. `192.168.64.1`) when enabled. Accepted values: `true` or `1` (enable), `false` or `0` (disable).                                                                          |
 
+### Local word-timed voices
+
+For per-word highlighting, run the pinned offline image built from `docker/kokoro/Dockerfile` on the private service network. Set `KOKORO_SPEECH_URL` (e.g. `http://kokoro:4320`) and `KOKORO_SPEECH_TOKEN` on Karakeep; set the same secret as `KOKORO_TOKEN` on the speech container. Use at least 32 random characters. Never publish its port. Private HTTP requires the explicit `REEDIT_SPEECH_ALLOW_PRIVATE_HTTP=1` acknowledgement. Both secrets remain server-side.
+
+Kokoro 0.9.4 uses the pinned Apache-2.0 Kokoro-82M model and English Heart voice. Word offsets and times come from its synthesis durations, not proportional estimates. Select **Kokoro Heart · word highlighting** in Listen. Existing browsers get a one-time voice-preference reset so the new timed voice is selected by default; Siri remains selectable but only has segment highlighting. Model inference stays local and offline, with no paid API. The container needs CPU and RAM; one-segment-ahead preloading cannot hide generation slower than playback.
+
+The timed synthesis response is private JSON containing base64 WAV, duration and original-text UTF-16 word offsets/times. Owner/session/CSRF checks still apply. Untimed Siri responses remain WAV. Do not enable a provider until its image passes the offline smoke test and resource checks.
+
 ## Monitoring
 
 Karakeep supports distributed tracing and structured event logging via OpenTelemetry. When enabled, traces and logs are collected for tRPC API calls, background worker operations, and other key workflows. Karakeep also exports prometheus-based metrics.

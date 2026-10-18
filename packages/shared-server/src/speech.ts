@@ -1,4 +1,5 @@
 import serverConfig from "@karakeep/shared/config";
+import { zTimedSpeech, validSpeechWords } from "@karakeep/shared/types/speech";
 
 export interface SpeechVoice {
   id: string;
@@ -133,10 +134,14 @@ async function readBodyCapped(
   return Buffer.concat(chunks);
 }
 
-async function workerRequest(path: string, body?: unknown): Promise<Response> {
+async function workerRequest(
+  path: string,
+  body?: unknown,
+  kokoro = false,
+): Promise<Response> {
   const { url, token } = resolveSpeechEndpoint(
-    serverConfig.speech.url,
-    serverConfig.speech.token,
+    kokoro ? serverConfig.speech.kokoroUrl : serverConfig.speech.url,
+    kokoro ? serverConfig.speech.kokoroToken : serverConfig.speech.token,
     serverConfig.speech.allowPrivateHttp,
     path,
   );
@@ -151,7 +156,9 @@ async function workerRequest(path: string, body?: unknown): Promise<Response> {
       },
       body: body === undefined ? undefined : JSON.stringify(body),
       redirect: "error",
-      signal: AbortSignal.timeout(WORKER_TIMEOUT_MS),
+      signal: AbortSignal.timeout(
+        path === "/voices" ? 5000 : WORKER_TIMEOUT_MS,
+      ),
     });
   } catch {
     throw new SpeechUpstreamError("Local speech worker is unavailable.");
@@ -189,7 +196,22 @@ function isSpeechVoice(value: unknown): value is SpeechVoice {
 }
 
 export async function getSpeechVoices(): Promise<SpeechVoice[]> {
-  const response = await workerRequest("/voices");
+  if (!serverConfig.speech.kokoroUrl) return getWorkerVoices(false);
+  const results = await Promise.allSettled([
+    getWorkerVoices(true),
+    getWorkerVoices(false),
+  ]);
+  const voices = results.flatMap((result) =>
+    result.status === "fulfilled" ? result.value : [],
+  );
+  if (voices.length) return voices;
+  const failed = results.find((result) => result.status === "rejected");
+  if (failed?.status === "rejected") throw failed.reason;
+  return [];
+}
+
+async function getWorkerVoices(kokoro: boolean): Promise<SpeechVoice[]> {
+  const response = await workerRequest("/voices", undefined, kokoro);
   const body = await readBodyCapped(response, MAX_VOICES_RESPONSE_BYTES);
 
   let parsed: unknown;
@@ -221,6 +243,39 @@ export async function getSpeechVoices(): Promise<SpeechVoice[]> {
     });
   }
   return voices;
+}
+
+export async function synthesizeTimedSpeech(text: string, voice: string) {
+  if (
+    !voice.startsWith("kokoro:") ||
+    !text.trim() ||
+    text.length > 10000 ||
+    voice.length > 300
+  ) {
+    throw new SpeechInvalidInputError("Invalid timed speech request.");
+  }
+  const response = await workerRequest("/synthesize", { text, voice }, true);
+  const bytes = await readBodyCapped(response, 45_000_000);
+  try {
+    const value = zTimedSpeech.parse(JSON.parse(bytes.toString("utf8")));
+    if (!validSpeechWords(value.words, text, value.duration))
+      throw new Error("Invalid words");
+    if (!/^[A-Za-z0-9+/]+={0,2}$/.test(value.audio))
+      throw new Error("Invalid encoding");
+    const audio = Buffer.from(value.audio, "base64");
+    if (
+      audio.length > MAX_AUDIO_BYTES ||
+      audio.toString("ascii", 0, 4) !== "RIFF" ||
+      audio.toString("ascii", 8, 12) !== "WAVE"
+    ) {
+      throw new Error("Invalid audio");
+    }
+    return value;
+  } catch {
+    throw new SpeechUpstreamError(
+      "Local word-timed speech returned invalid audio or timings.",
+    );
+  }
 }
 
 export async function synthesizeSpeech(

@@ -10,6 +10,7 @@ const compiledSpeechConvert = compile({
     { selector: "img", format: "skip" },
     { selector: "hr", format: "skip" },
     { selector: "a", options: { ignoreHref: true } },
+    { selector: "table", options: { uppercaseHeaderCells: false } },
     { selector: "h1", options: { uppercase: false } },
     { selector: "h2", options: { uppercase: false } },
     { selector: "h3", options: { uppercase: false } },

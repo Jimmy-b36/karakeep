@@ -199,6 +199,8 @@ const allEnv = z.object({
   // Local speech (read-aloud) worker
   REEDIT_SPEECH_URL: z.string().url().optional(),
   REEDIT_SPEECH_TOKEN: z.string().optional(),
+  KOKORO_SPEECH_URL: z.string().url().optional(),
+  KOKORO_SPEECH_TOKEN: z.string().optional(),
   REEDIT_SPEECH_ALLOW_PRIVATE_HTTP: zReeditAllowPrivateHttp.optional(),
 
   // Legal
@@ -582,6 +584,8 @@ const serverConfigSchema = allEnv.transform((val, ctx) => {
       url: val.REEDIT_SPEECH_URL,
       token: val.REEDIT_SPEECH_TOKEN,
       allowPrivateHttp: val.REEDIT_SPEECH_ALLOW_PRIVATE_HTTP ?? false,
+      kokoroUrl: val.KOKORO_SPEECH_URL,
+      kokoroToken: val.KOKORO_SPEECH_TOKEN,
     },
   };
   if (obj.auth.emailVerificationRequired && !obj.email.smtp) {

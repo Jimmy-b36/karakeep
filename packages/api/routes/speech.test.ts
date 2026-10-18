@@ -8,6 +8,7 @@ import type { Context } from "@karakeep/trpc";
 const {
   getSpeechVoicesMock,
   synthesizeSpeechMock,
+  synthesizeTimedSpeechMock,
   SpeechNotConfiguredError,
   SpeechBusyError,
   SpeechInvalidInputError,
@@ -44,6 +45,7 @@ const {
   return {
     getSpeechVoicesMock: vi.fn(),
     synthesizeSpeechMock: vi.fn(),
+    synthesizeTimedSpeechMock: vi.fn(),
     SpeechNotConfiguredError,
     SpeechBusyError,
     SpeechInvalidInputError,
@@ -65,6 +67,7 @@ vi.mock("@karakeep/trpc/routers/_app", () => ({
 vi.mock("@karakeep/shared-server", () => ({
   getSpeechVoices: getSpeechVoicesMock,
   synthesizeSpeech: synthesizeSpeechMock,
+  synthesizeTimedSpeech: synthesizeTimedSpeechMock,
   SpeechNotConfiguredError,
   SpeechBusyError,
   SpeechInvalidInputError,
@@ -165,6 +168,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   getSpeechVoicesMock.mockReset();
   synthesizeSpeechMock.mockReset();
+  synthesizeTimedSpeechMock.mockReset();
   bookmarkFromIdMock.mockReset();
 });
 
@@ -235,6 +239,56 @@ describe("GET /speech/voices", () => {
 });
 
 describe("POST /bookmarks/:bookmarkId/speech", () => {
+  it("uses shorter word-boundary chunks for local timed speech", async () => {
+    fakeBookmark({ htmlContent: "<p>" + "sample words ".repeat(80) + "</p>" });
+    synthesizeTimedSpeechMock.mockResolvedValueOnce({
+      audio: "test",
+      duration: 1,
+      words: [],
+    });
+    const response = await postSpeech(buildBookmarkApp(sessionCtx), {
+      voice: "kokoro:af_heart",
+    });
+    expect(response.status).toBe(200);
+    const text = synthesizeTimedSpeechMock.mock.calls[0][0] as string;
+    expect(Array.from(text).length).toBeLessThanOrEqual(400);
+    expect(text.endsWith(" ")).toBe(true);
+    expect(Number(response.headers.get("X-Speech-Next"))).toBe(
+      Array.from(text).length,
+    );
+  });
+  it("denies timed synthesis to nonowners without contacting either worker", async () => {
+    fakeBookmark({
+      ensureOwnershipError: new TRPCError({ code: "FORBIDDEN" }),
+    });
+    const response = await postSpeech(buildBookmarkApp(sessionCtx), {
+      voice: "kokoro:af_heart",
+    });
+    expect(response.status).toBe(403);
+    expect(synthesizeTimedSpeechMock).not.toHaveBeenCalled();
+    expect(synthesizeSpeechMock).not.toHaveBeenCalled();
+  });
+  it("returns Kokoro audio and word metadata only after owner authorization", async () => {
+    fakeBookmark();
+    const timed = {
+      audio: "UklGRjAwMDBXQVZF",
+      duration: 1,
+      words: [{ from: 0, to: 5, start: 0, end: 0.8 }],
+    };
+    synthesizeTimedSpeechMock.mockResolvedValueOnce(timed);
+    const response = await postSpeech(buildBookmarkApp(sessionCtx), {
+      voice: "kokoro:af_heart",
+    });
+    expect(response.status).toBe(200);
+    expect(response.headers.get("Content-Type")).toContain("application/json");
+    expect(response.headers.get("Cache-Control")).toBe("private, no-store");
+    expect(await response.json()).toEqual(timed);
+    expect(synthesizeSpeechMock).not.toHaveBeenCalled();
+    expect(synthesizeTimedSpeechMock).toHaveBeenCalledWith(
+      "Hello world.",
+      "kokoro:af_heart",
+    );
+  });
   it("rejects unauthenticated requests without synthesis", async () => {
     const app = buildBookmarkApp(unauthedCtx);
 

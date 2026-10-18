@@ -26,6 +26,7 @@ export default function ReaderView({
   readOnly,
   progressBarStyle,
   speechText,
+  speechWord,
 }: {
   bookmarkId: string;
   className?: string;
@@ -33,11 +34,12 @@ export default function ReaderView({
   readOnly: boolean;
   progressBarStyle?: React.CSSProperties;
   speechText?: string | null;
+  speechWord?: { from: number; to: number } | null;
 }) {
   const { t } = useTranslation();
   const api = useTRPC();
   const speechHighlightRef = useRef<HTMLDivElement>(null);
-  useSpeechHighlight(speechHighlightRef, speechText);
+  useSpeechHighlight(speechHighlightRef, speechText, speechWord);
   const { data: highlights } = useQuery(
     api.highlights.getForBookmark.queryOptions({
       bookmarkId,

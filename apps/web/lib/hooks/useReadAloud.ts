@@ -16,7 +16,7 @@ import type {
 
 export const READ_ALOUD_SPEEDS = [0.75, 1, 1.25, 1.5, 1.75, 2] as const;
 
-const VOICE_STORAGE_KEY = "karakeep-read-aloud-voice";
+const VOICE_STORAGE_KEY = "karakeep-read-aloud-voice-v2";
 const SPEED_STORAGE_KEY = "karakeep-read-aloud-speed";
 
 function readStoredVoice(): string | null {
@@ -107,6 +107,23 @@ export function useReadAloud(bookmarkId: string, enabled: boolean) {
       setSnapshot({ status: "idle", error: null, currentText: null });
     }
   }, [enabled]);
+
+  const timedPlayback = snapshot.currentWord !== undefined;
+  useEffect(() => {
+    if (
+      !timedPlayback ||
+      snapshot.status !== "playing" ||
+      typeof requestAnimationFrame === "undefined"
+    )
+      return;
+    let frame: number;
+    const tick = () => {
+      playerRef.current?.updateProgress();
+      frame = requestAnimationFrame(tick);
+    };
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+  }, [snapshot.status, timedPlayback]);
 
   const loadVoices = useCallback(async () => {
     if (voicesLoadedRef.current) {

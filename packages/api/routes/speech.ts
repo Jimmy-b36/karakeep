@@ -14,6 +14,7 @@ import {
   SpeechNotConfiguredError,
   SpeechUpstreamError,
   synthesizeSpeech,
+  synthesizeTimedSpeech,
 } from "@karakeep/shared-server";
 import { BookmarkTypes } from "@karakeep/shared/types/bookmarks";
 import { Bookmark } from "@karakeep/trpc/models/bookmarks";
@@ -164,21 +165,31 @@ export const speechBookmarkRoutes = new Hono()
       );
     }
 
+    let maxChars = SPEECH_CHUNK_MAX_CHARS;
+    if (voice.startsWith("kokoro:")) {
+      const characters = Array.from(speechText);
+      maxChars = Math.min(400, characters.length - start);
+      if (start + maxChars < characters.length) {
+        for (let offset = maxChars - 1; offset >= 200; offset--) {
+          if (/\s/.test(characters[start + offset]!)) {
+            maxChars = offset + 1;
+            break;
+          }
+        }
+      }
+    }
     const chunk = chunkReadableContent({
       bookmarkId,
       content: speechText,
       contentVersion: speechVersion,
       format: "text",
-      maxChars: SPEECH_CHUNK_MAX_CHARS,
+      maxChars: Math.max(0, maxChars),
       start,
     });
     if (!chunk || chunk.content.length === 0) {
       return c.json({ error: "No more content to read." }, 422);
     }
 
-    const audio = await synthesizeSpeech(chunk.content, voice);
-
-    c.header("Content-Type", "audio/wav");
     c.header("Cache-Control", "private, no-store");
     c.header(
       "X-Speech-Range",
@@ -190,6 +201,11 @@ export const speechBookmarkRoutes = new Hono()
       "X-Speech-Text",
       Buffer.from(chunk.content, "utf8").toString("base64url"),
     );
+    if (voice.startsWith("kokoro:")) {
+      return c.json(await synthesizeTimedSpeech(chunk.content, voice));
+    }
+    const audio = await synthesizeSpeech(chunk.content, voice);
+    c.header("Content-Type", "audio/wav");
     // Copy exact bytes: Buffer is Uint8Array<ArrayBufferLike>, not Hono's Data.
     return c.body(new Uint8Array(audio), 200);
   })

@@ -24,6 +24,13 @@ beforeEach(() => {
 });
 
 describe("applySpeechHighlight", () => {
+  it("maps a timed word after an explicit line break", () => {
+    const container = createContainer("<p>Hello<br>world</p>");
+    applySpeechHighlight(container, "Hello\nworld", { from: 6, to: 11 });
+    expect(highlightedSpan(container)?.textContent).toBe("world");
+    applySpeechHighlight(container, null);
+    expect(container.innerHTML).toBe("<p>Hello<br>world</p>");
+  });
   it("does not insert spaces inside inline-split words", () => {
     const container = createContainer(
       "<p>Read <strong>high</strong>lighting now.</p>",

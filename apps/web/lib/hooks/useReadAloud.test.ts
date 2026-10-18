@@ -20,6 +20,11 @@ vi.mock("@/lib/read-aloud", async (importOriginal) => {
 import { useReadAloud } from "./useReadAloud";
 
 class FakeAudio {
+  static latest: FakeAudio;
+  constructor() {
+    FakeAudio.latest = this;
+  }
+  currentTime = 0;
   playbackRate = 1;
   src = "";
   onended: ((event: Event) => void) | null = null;
@@ -68,6 +73,41 @@ describe("useReadAloud voice selection", () => {
     vi.unstubAllGlobals();
   });
 
+  it("updates the active word from the audio clock on animation frames", async () => {
+    const frames: FrameRequestCallback[] = [];
+    vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
+      frames.push(callback);
+      return frames.length;
+    });
+    vi.stubGlobal("cancelAnimationFrame", vi.fn());
+    mocks.fetchSpeechChunk.mockResolvedValueOnce({
+      blob: new Blob(["audio"]),
+      next: null,
+      contentVersion: "v1",
+      range: "0-11/11",
+      text: "Hello world",
+      words: [
+        { from: 0, to: 5, start: 0, end: 0.4 },
+        { from: 6, to: 11, start: 0.5, end: 1 },
+      ],
+    });
+    const { result, unmount } = renderHook(() =>
+      useReadAloud("bookmark-1", true),
+    );
+    await act(async () => {
+      await result.current.loadVoices();
+    });
+    await startAndSettle(result);
+    expect(result.current.snapshot.currentWord?.from).toBe(0);
+    act(() => {
+      FakeAudio.latest.currentTime = 0.7;
+      frames.shift()!(0);
+    });
+    expect(result.current.snapshot.currentWord?.from).toBe(6);
+    unmount();
+    expect(cancelAnimationFrame).toHaveBeenCalled();
+  });
+
   it("uses the auto-selected first voice for the first request when nothing is stored", async () => {
     const { result } = renderHook(() => useReadAloud("bookmark-1", true));
 
@@ -86,7 +126,7 @@ describe("useReadAloud voice selection", () => {
   });
 
   it("uses the auto-selected first voice for the first request when the stored voice is stale", async () => {
-    window.localStorage.setItem("karakeep-read-aloud-voice", "stale-voice");
+    window.localStorage.setItem("karakeep-read-aloud-voice-v2", "stale-voice");
     const { result } = renderHook(() => useReadAloud("bookmark-1", true));
 
     await act(async () => {
@@ -103,7 +143,7 @@ describe("useReadAloud voice selection", () => {
   });
 
   it("keeps a valid stored voice for the first request", async () => {
-    window.localStorage.setItem("karakeep-read-aloud-voice", "voice-b");
+    window.localStorage.setItem("karakeep-read-aloud-voice-v2", "voice-b");
     const { result } = renderHook(() => useReadAloud("bookmark-1", true));
 
     await act(async () => {

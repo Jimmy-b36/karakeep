@@ -34,21 +34,33 @@ function buildNormalizedText(container: HTMLElement): NormalizedText {
   let spacePosition: RawPosition | null = null;
   let previousBlock: Element | null = null;
 
-  const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, {
-    acceptNode(node) {
-      const parent = node.parentElement;
-      if (
-        parent &&
-        (parent.tagName === "SCRIPT" || parent.tagName === "STYLE")
-      ) {
-        return NodeFilter.FILTER_REJECT;
-      }
-      return NodeFilter.FILTER_ACCEPT;
+  const walker = document.createTreeWalker(
+    container,
+    NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT,
+    {
+      acceptNode(node) {
+        const parent = node.parentElement;
+        if (
+          parent &&
+          (parent.tagName === "SCRIPT" || parent.tagName === "STYLE")
+        ) {
+          return NodeFilter.FILTER_REJECT;
+        }
+        return NodeFilter.FILTER_ACCEPT;
+      },
     },
-  });
+  );
 
-  let node: Text | null;
-  while ((node = walker.nextNode() as Text | null)) {
+  let entry: Node | null;
+  while ((entry = walker.nextNode())) {
+    if (entry.nodeType !== Node.TEXT_NODE) {
+      if ((entry as Element).tagName === "BR") {
+        pendingSpace = true;
+        spacePosition = null;
+      }
+      continue;
+    }
+    const node = entry as Text;
     const block =
       node.parentElement?.closest(
         "p,div,li,h1,h2,h3,h4,h5,h6,blockquote,pre,td,th",
@@ -126,6 +138,7 @@ function highlightRange(
 export function applySpeechHighlight(
   container: HTMLElement | null,
   text: string | null | undefined,
+  word?: { from: number; to: number } | null,
 ): void {
   if (!container) {
     return;
@@ -141,12 +154,15 @@ export function applySpeechHighlight(
     if (matchIndex === -1) {
       return;
     }
-    highlightRange(
-      container,
-      normalized,
-      matchIndex,
-      matchIndex + search.length,
-    );
+    const prefix = (offset: number) =>
+      (text ?? "").slice(0, offset).replace(/\s+/g, " ").trimStart().length;
+    const start = word ? matchIndex + prefix(word.from) : matchIndex;
+    const end = word
+      ? matchIndex + prefix(word.to)
+      : matchIndex + search.length;
+    if (start < end && end <= matchIndex + search.length) {
+      highlightRange(container, normalized, start, end);
+    }
   } catch {
     // Highlighting is purely cosmetic; never interrupt read-aloud playback.
   }

@@ -8,6 +8,8 @@ const { config } = vi.hoisted(() => ({
       url: undefined as string | undefined,
       token: undefined as string | undefined,
       allowPrivateHttp: false,
+      kokoroUrl: undefined as string | undefined,
+      kokoroToken: undefined as string | undefined,
     },
   },
 }));
@@ -22,6 +24,7 @@ import {
   SpeechNotConfiguredError,
   SpeechUpstreamError,
   synthesizeSpeech,
+  synthesizeTimedSpeech,
 } from "./speech";
 
 interface StubRequest {
@@ -84,6 +87,36 @@ function sendJson(res: http.ServerResponse, status: number, body: unknown) {
   res.writeHead(status, { "Content-Type": "application/json" });
   res.end(JSON.stringify(body));
 }
+
+describe("synthesizeTimedSpeech", () => {
+  it("forwards only the Kokoro token and rejects invalid word ranges", async () => {
+    let invalid = false;
+    const stub = await startStub((_req, res) =>
+      sendJson(res, 200, {
+        audio: wav().toString("base64"),
+        duration: 1,
+        words: [{ from: 0, to: invalid ? 100 : 5, start: 0, end: 0.8 }],
+      }),
+    );
+    config.speech.kokoroUrl = `http://127.0.0.1:${stub.port}`;
+    config.speech.kokoroToken = "kokoro-private-token";
+    try {
+      const result = await synthesizeTimedSpeech("Hello", "kokoro:af_heart");
+      expect(result.words[0]?.to).toBe(5);
+      expect(stub.requests[0]?.authorization).toBe(
+        "Bearer kokoro-private-token",
+      );
+      invalid = true;
+      await expect(
+        synthesizeTimedSpeech("Hello", "kokoro:af_heart"),
+      ).rejects.toBeInstanceOf(SpeechUpstreamError);
+    } finally {
+      config.speech.kokoroUrl = undefined;
+      config.speech.kokoroToken = undefined;
+      await stub.close();
+    }
+  });
+});
 
 describe("resolveSpeechEndpoint", () => {
   it("rejects missing URL or token", () => {

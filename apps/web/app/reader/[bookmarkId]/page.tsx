@@ -142,7 +142,12 @@ export default function ReaderViewPage() {
                       bookmarkId={bookmarkId}
                       readOnly={!isOwner}
                       progressBarStyle={{ position: "fixed", top: "3.5rem" }}
-                      speechText={readAloud.snapshot.currentText}
+                      speechText={
+                        readAloud.snapshot.currentWord === null
+                          ? null
+                          : readAloud.snapshot.currentText
+                      }
+                      speechWord={readAloud.snapshot.currentWord}
                     />
                   </div>
                 </Suspense>
