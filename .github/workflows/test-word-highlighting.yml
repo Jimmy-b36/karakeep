@@ -19,7 +19,7 @@ jobs:
             --cap-drop ALL --security-opt no-new-privileges -e KOKORO_TOKEN=synthetic-word-test-token-000000000000 \
             ghcr.io/jimmy-b36/karakeep-kokoro@sha256:44baf58dd2ecad9a0ce5b0c2fe945e96c227e53b40381895070ec629915900ef
           docker run -d --name word-web --network word-e2e --network-alias web --memory 2g --cpus 2 \
-            -e HOSTNAME=0.0.0.0 -e PORT=3000 -e DATA_DIR=/tmp/word-data -e NEXTAUTH_URL=http://web:3000 \
+            -e HOSTNAME=0.0.0.0 -e PORT=3000 -e DATA_DIR=/tmp -e NEXTAUTH_URL=http://web:3000 \
             -e NEXTAUTH_SECRET=synthetic-word-session-secret-000000000 -e DISABLE_SIGNUPS=false \
             -e KOKORO_SPEECH_URL=http://kokoro:4320 -e KOKORO_SPEECH_TOKEN=synthetic-word-test-token-000000000000 \
             -e REEDIT_SPEECH_ALLOW_PRIVATE_HTTP=1 \
@@ -41,7 +41,7 @@ jobs:
           docker exec word-driver node /tmp/test.mjs --prepare
           docker exec -i word-web node - <<'JS'
           const { DatabaseSync } = require('node:sqlite');
-          const db = new DatabaseSync('/tmp/word-data/db.db');
+          const db = new DatabaseSync('/tmp/db.db');
           const user = db.prepare('SELECT id FROM user WHERE email = ?').get('word-e2e@example.test');
           if (!user) throw Error('Synthetic user missing');
           const now = Math.floor(Date.now()/1000);
