@@ -1,0 +1,52 @@
+name: Evaluate local Kokoro timing (ARM64)
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  evaluate:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          persist-credentials: false
+      - name: Prepare disposable evaluator
+        run: |
+          set -euo pipefail
+          docker run -d --name kokoro-eval --cap-drop ALL \
+            --cap-add CHOWN --cap-add DAC_OVERRIDE --cap-add FOWNER --cap-add SETUID --cap-add SETGID \
+            --security-opt no-new-privileges \
+            --memory 6g --cpus 2 --pids-limit 512 python:3.12-slim sleep infinity
+          docker exec kokoro-eval sh -c 'apt-get update && apt-get install -y --no-install-recommends espeak-ng libsndfile1 && rm -rf /var/lib/apt/lists/*'
+          docker exec kokoro-eval pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu torch==2.8.0
+          docker exec kokoro-eval pip install --no-cache-dir \
+            kokoro==0.9.4 'misaki[en]==0.9.4' transformers==4.51.3 \
+            huggingface_hub==0.34.4 numpy==2.2.6 spacy==3.8.7 \
+            https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl
+          docker cp scripts/evaluate-kokoro.py kokoro-eval:/tmp/evaluate-kokoro.py
+          docker exec --user 65534 --env HOME=/tmp/kokoro-user \
+            --env HF_HOME=/tmp/kokoro-user/huggingface kokoro-eval python /tmp/evaluate-kokoro.py --prepare
+          docker exec kokoro-eval pip freeze > kokoro-requirements-resolved.txt
+          docker inspect --format '{{.Image}}' kokoro-eval > kokoro-base-image.txt
+          docker network disconnect bridge kokoro-eval
+      - name: Evaluate offline with synthetic text only
+        run: |
+          set -euo pipefail
+          test "$(docker inspect --format '{{json .NetworkSettings.Networks}}' kokoro-eval)" = '{}'
+          test "$(docker inspect --format '{{json .Mounts}}' kokoro-eval)" = '[]'
+          docker exec --user 65534 --env HOME=/tmp/kokoro-user \
+            --env HF_HOME=/tmp/kokoro-user/huggingface --env HF_HUB_OFFLINE=1 \
+            --env TRANSFORMERS_OFFLINE=1 kokoro-eval python /tmp/evaluate-kokoro.py
+          docker cp kokoro-eval:/tmp/kokoro-evaluation/out ./kokoro-evaluation
+          cp kokoro-requirements-resolved.txt kokoro-base-image.txt kokoro-evaluation/
+      - name: Save synthetic audio, timing and performance evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: kokoro-synthetic-evaluation
+          path: kokoro-evaluation/
+          retention-days: 7
+          if-no-files-found: error
+      - name: Clean up evaluator
+        if: always()
+        run: docker rm -f kokoro-eval || true
