@@ -11,7 +11,7 @@ let target;
 for (let attempt = 0; attempt < 60; attempt++) {
   try {
     if (prepare) {
-      const response = await fetch(`${browser}/json/new?${encodeURIComponent("http://web:3000/signin")}`, { method: "PUT" });
+      const response = await fetch(`${browser}/json/new?http://web:3000/signin`, { method: "PUT" });
       assert(response.ok);
       target = await response.json();
     } else {
@@ -55,12 +55,13 @@ async function until(expression, message) {
     if (await evaluate(expression)) return;
     await delay(250);
   }
-  throw new Error(message);
+  throw new Error(message + ": " + JSON.stringify(await evaluate('({url:location.href,state:document.readyState,body:document.body?.textContent?.slice(0,500)})')));
 }
 
 try {
   await command("Page.enable");
   if (prepare) {
+    await command("Page.navigate", { url: "http://web:3000/signin" });
     await until('location.origin === "http://web:3000" && document.readyState === "complete"', "App page did not load");
     const status = await evaluate(`(async () => {
       const r = await fetch('/api/auth/sign-up/email', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({name:'Synthetic Reader',email:'word-e2e@example.test',password:'Synthetic-e2e-password-12345'})});
