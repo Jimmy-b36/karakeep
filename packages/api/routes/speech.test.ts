@@ -7,8 +7,9 @@ import type { Context } from "@karakeep/trpc";
 
 const {
   getSpeechVoicesMock,
-  synthesizeSpeechMock,
+  synthesizeAlignedSpeechMock,
   synthesizeTimedSpeechMock,
+  alignedSpeechConfiguredMock,
   SpeechNotConfiguredError,
   SpeechBusyError,
   SpeechInvalidInputError,
@@ -44,8 +45,9 @@ const {
   }
   return {
     getSpeechVoicesMock: vi.fn(),
-    synthesizeSpeechMock: vi.fn(),
+    synthesizeAlignedSpeechMock: vi.fn(),
     synthesizeTimedSpeechMock: vi.fn(),
+    alignedSpeechConfiguredMock: vi.fn(() => false),
     SpeechNotConfiguredError,
     SpeechBusyError,
     SpeechInvalidInputError,
@@ -66,8 +68,9 @@ vi.mock("@karakeep/trpc/routers/_app", () => ({
 }));
 vi.mock("@karakeep/shared-server", () => ({
   getSpeechVoices: getSpeechVoicesMock,
-  synthesizeSpeech: synthesizeSpeechMock,
+  synthesizeAlignedSpeech: synthesizeAlignedSpeechMock,
   synthesizeTimedSpeech: synthesizeTimedSpeechMock,
+  alignedSpeechConfigured: alignedSpeechConfiguredMock,
   SpeechNotConfiguredError,
   SpeechBusyError,
   SpeechInvalidInputError,
@@ -167,8 +170,10 @@ async function postSpeech(
 beforeEach(() => {
   vi.clearAllMocks();
   getSpeechVoicesMock.mockReset();
-  synthesizeSpeechMock.mockReset();
+  synthesizeAlignedSpeechMock.mockReset();
   synthesizeTimedSpeechMock.mockReset();
+  alignedSpeechConfiguredMock.mockReset();
+  alignedSpeechConfiguredMock.mockReturnValue(false);
   bookmarkFromIdMock.mockReset();
 });
 
@@ -266,7 +271,7 @@ describe("POST /bookmarks/:bookmarkId/speech", () => {
     });
     expect(response.status).toBe(403);
     expect(synthesizeTimedSpeechMock).not.toHaveBeenCalled();
-    expect(synthesizeSpeechMock).not.toHaveBeenCalled();
+    expect(synthesizeAlignedSpeechMock).not.toHaveBeenCalled();
   });
   it("returns Kokoro audio and word metadata only after owner authorization", async () => {
     fakeBookmark();
@@ -283,7 +288,7 @@ describe("POST /bookmarks/:bookmarkId/speech", () => {
     expect(response.headers.get("Content-Type")).toContain("application/json");
     expect(response.headers.get("Cache-Control")).toBe("private, no-store");
     expect(await response.json()).toEqual(timed);
-    expect(synthesizeSpeechMock).not.toHaveBeenCalled();
+    expect(synthesizeAlignedSpeechMock).not.toHaveBeenCalled();
     expect(synthesizeTimedSpeechMock).toHaveBeenCalledWith(
       "Hello world.",
       "kokoro:af_heart",
@@ -296,7 +301,7 @@ describe("POST /bookmarks/:bookmarkId/speech", () => {
 
     expect(response.status).toBe(401);
     expect(await response.json()).toEqual({ error: "Unauthorized" });
-    expect(synthesizeSpeechMock).not.toHaveBeenCalled();
+    expect(synthesizeAlignedSpeechMock).not.toHaveBeenCalled();
   });
 
   it("rejects API-key authentication without synthesis", async () => {
@@ -308,7 +313,7 @@ describe("POST /bookmarks/:bookmarkId/speech", () => {
     expect(await response.json()).toEqual({
       error: "API keys cannot use local speech.",
     });
-    expect(synthesizeSpeechMock).not.toHaveBeenCalled();
+    expect(synthesizeAlignedSpeechMock).not.toHaveBeenCalled();
   });
 
   it("rejects foreign Origin without content lookup or synthesis", async () => {
@@ -328,7 +333,7 @@ describe("POST /bookmarks/:bookmarkId/speech", () => {
       error: "Cross-origin speech requests are not allowed.",
     });
     expect(bookmarkFromIdMock).not.toHaveBeenCalled();
-    expect(synthesizeSpeechMock).not.toHaveBeenCalled();
+    expect(synthesizeAlignedSpeechMock).not.toHaveBeenCalled();
   });
 
   it("rejects cross-site Sec-Fetch-Site when Origin is absent", async () => {
@@ -348,12 +353,15 @@ describe("POST /bookmarks/:bookmarkId/speech", () => {
       error: "Cross-origin speech requests are not allowed.",
     });
     expect(bookmarkFromIdMock).not.toHaveBeenCalled();
-    expect(synthesizeSpeechMock).not.toHaveBeenCalled();
+    expect(synthesizeAlignedSpeechMock).not.toHaveBeenCalled();
   });
 
   it("allows same-origin and missing-Origin non-browser requests", async () => {
     fakeBookmark();
-    synthesizeSpeechMock.mockResolvedValue(Buffer.from("RIFFxxxxWAVEyyyy"));
+    synthesizeAlignedSpeechMock.mockResolvedValue({
+      audio: Buffer.from("RIFFxxxxWAVEyyyy"),
+      timed: null,
+    });
     const app = buildBookmarkApp(sessionCtx);
 
     const sameOrigin = await postSpeech(
@@ -369,7 +377,7 @@ describe("POST /bookmarks/:bookmarkId/speech", () => {
     const missingOrigin = await postSpeech(app, { voice: "voice-1" });
     expect(missingOrigin.status).toBe(200);
 
-    expect(synthesizeSpeechMock).toHaveBeenCalledTimes(2);
+    expect(synthesizeAlignedSpeechMock).toHaveBeenCalledTimes(2);
   });
 
   it("rejects non-JSON content types without content lookup or synthesis", async () => {
@@ -386,12 +394,15 @@ describe("POST /bookmarks/:bookmarkId/speech", () => {
       error: "Invalid request content type.",
     });
     expect(bookmarkFromIdMock).not.toHaveBeenCalled();
-    expect(synthesizeSpeechMock).not.toHaveBeenCalled();
+    expect(synthesizeAlignedSpeechMock).not.toHaveBeenCalled();
   });
 
   it("accepts application/json with a charset parameter", async () => {
     fakeBookmark();
-    synthesizeSpeechMock.mockResolvedValue(Buffer.from("RIFFxxxxWAVEyyyy"));
+    synthesizeAlignedSpeechMock.mockResolvedValue({
+      audio: Buffer.from("RIFFxxxxWAVEyyyy"),
+      timed: null,
+    });
     const app = buildBookmarkApp(sessionCtx);
 
     const response = await postSpeech(
@@ -401,7 +412,7 @@ describe("POST /bookmarks/:bookmarkId/speech", () => {
     );
 
     expect(response.status).toBe(200);
-    expect(synthesizeSpeechMock).toHaveBeenCalledOnce();
+    expect(synthesizeAlignedSpeechMock).toHaveBeenCalledOnce();
   });
 
   it("rejects non-owners without synthesis", async () => {
@@ -417,7 +428,7 @@ describe("POST /bookmarks/:bookmarkId/speech", () => {
       error: "You do not have access to this bookmark.",
     });
     expect(bookmark.asZBookmark).not.toHaveBeenCalled();
-    expect(synthesizeSpeechMock).not.toHaveBeenCalled();
+    expect(synthesizeAlignedSpeechMock).not.toHaveBeenCalled();
   });
 
   it("maps missing bookmarks to 404", async () => {
@@ -428,7 +439,7 @@ describe("POST /bookmarks/:bookmarkId/speech", () => {
 
     expect(response.status).toBe(404);
     expect(await response.json()).toEqual({ error: "Bookmark not found." });
-    expect(synthesizeSpeechMock).not.toHaveBeenCalled();
+    expect(synthesizeAlignedSpeechMock).not.toHaveBeenCalled();
   });
 
   it("rejects unsupported bookmark types with 422", async () => {
@@ -441,7 +452,7 @@ describe("POST /bookmarks/:bookmarkId/speech", () => {
     expect(await response.json()).toEqual({
       error: "This bookmark cannot be read aloud.",
     });
-    expect(synthesizeSpeechMock).not.toHaveBeenCalled();
+    expect(synthesizeAlignedSpeechMock).not.toHaveBeenCalled();
   });
 
   it("rejects empty readable content with 422", async () => {
@@ -454,7 +465,7 @@ describe("POST /bookmarks/:bookmarkId/speech", () => {
     expect(await response.json()).toEqual({
       error: "This bookmark has no readable content.",
     });
-    expect(synthesizeSpeechMock).not.toHaveBeenCalled();
+    expect(synthesizeAlignedSpeechMock).not.toHaveBeenCalled();
   });
 
   it("rejects invalid requests with 400 before synthesis", async () => {
@@ -472,7 +483,46 @@ describe("POST /bookmarks/:bookmarkId/speech", () => {
     expect(negativeStart.status).toBe(400);
     expect(await negativeStart.json()).toEqual({ error: "Invalid request." });
 
-    expect(synthesizeSpeechMock).not.toHaveBeenCalled();
+    expect(synthesizeAlignedSpeechMock).not.toHaveBeenCalled();
+  });
+
+  it("returns aligned Siri audio and word metadata when the aligner is configured", async () => {
+    fakeBookmark({ htmlContent: "Hello world." });
+    const timed = {
+      audio: "UklGRjAwMDBXQVZF",
+      duration: 1,
+      words: [{ from: 0, to: 5, start: 0, end: 0.8 }],
+    };
+    synthesizeAlignedSpeechMock.mockResolvedValueOnce({
+      audio: Buffer.from("RIFFxxxxWAVEyyyy"),
+      timed,
+    });
+    const response = await postSpeech(buildBookmarkApp(sessionCtx), {
+      voice: "voice-1",
+    });
+    expect(response.status).toBe(200);
+    expect(response.headers.get("Content-Type")).toContain("application/json");
+    expect(await response.json()).toEqual(timed);
+    expect(synthesizeAlignedSpeechMock).toHaveBeenCalledWith(
+      "Hello world.",
+      "voice-1",
+    );
+  });
+
+  it("uses shorter word-boundary chunks when only the aligner provides timings", async () => {
+    alignedSpeechConfiguredMock.mockReturnValue(true);
+    fakeBookmark({ htmlContent: "<p>" + "sample words ".repeat(80) + "</p>" });
+    synthesizeAlignedSpeechMock.mockResolvedValueOnce({
+      audio: Buffer.from("RIFFxxxxWAVEyyyy"),
+      timed: null,
+    });
+    const response = await postSpeech(buildBookmarkApp(sessionCtx), {
+      voice: "voice-1",
+    });
+    expect(response.status).toBe(200);
+    const text = synthesizeAlignedSpeechMock.mock.calls[0]![0] as string;
+    expect(Array.from(text).length).toBeLessThanOrEqual(400);
+    expect(text.endsWith(" ")).toBe(true);
   });
 
   it("renders LINK HTML as DOM-matching speech text", async () => {
@@ -482,7 +532,10 @@ describe("POST /bookmarks/:bookmarkId/speech", () => {
         "<h2>Heading</h2>" +
         "<ul><li>item</li></ul>",
     });
-    synthesizeSpeechMock.mockResolvedValue(Buffer.from("RIFFxxxxWAVEyyyy"));
+    synthesizeAlignedSpeechMock.mockResolvedValue({
+      audio: Buffer.from("RIFFxxxxWAVEyyyy"),
+      timed: null,
+    });
     const app = buildBookmarkApp(sessionCtx);
 
     const response = await postSpeech(app, { voice: "voice-1", start: 0 });
@@ -514,14 +567,17 @@ describe("POST /bookmarks/:bookmarkId/speech", () => {
       error: "The bookmark content changed. Restart read-aloud.",
     });
     expect(bookmark.asZBookmark).toHaveBeenCalledOnce();
-    expect(synthesizeSpeechMock).not.toHaveBeenCalled();
+    expect(synthesizeAlignedSpeechMock).not.toHaveBeenCalled();
   });
 
   it("synthesizes a chunk and returns WAV with range headers", async () => {
     const content = "a".repeat(1200);
     const contentVersion = speechVersionFor(content);
     fakeBookmark({ htmlContent: content });
-    synthesizeSpeechMock.mockResolvedValue(Buffer.from("RIFFxxxxWAVEyyyy"));
+    synthesizeAlignedSpeechMock.mockResolvedValue({
+      audio: Buffer.from("RIFFxxxxWAVEyyyy"),
+      timed: null,
+    });
     const app = buildBookmarkApp(sessionCtx);
 
     const response = await postSpeech(app, {
@@ -538,8 +594,8 @@ describe("POST /bookmarks/:bookmarkId/speech", () => {
     );
     expect(response.headers.get("X-Speech-Range")).toBe("0-1000/1200");
     expect(response.headers.get("X-Speech-Next")).toBe("1000");
-    expect(synthesizeSpeechMock).toHaveBeenCalledOnce();
-    const text = synthesizeSpeechMock.mock.calls[0]![0] as string;
+    expect(synthesizeAlignedSpeechMock).toHaveBeenCalledOnce();
+    const text = synthesizeAlignedSpeechMock.mock.calls[0]![0] as string;
     expect([...text].length).toBe(1000);
     expect(
       Buffer.from(response.headers.get("X-Speech-Text")!, "base64url").toString(
@@ -551,7 +607,10 @@ describe("POST /bookmarks/:bookmarkId/speech", () => {
   it("returns the chunk text as a UTF-8 base64url header", async () => {
     const content = "Héllo wörld — unicode 😀";
     fakeBookmark({ htmlContent: content });
-    synthesizeSpeechMock.mockResolvedValue(Buffer.from("RIFFxxxxWAVEyyyy"));
+    synthesizeAlignedSpeechMock.mockResolvedValue({
+      audio: Buffer.from("RIFFxxxxWAVEyyyy"),
+      timed: null,
+    });
     const app = buildBookmarkApp(sessionCtx);
 
     const response = await postSpeech(app, {
@@ -570,7 +629,10 @@ describe("POST /bookmarks/:bookmarkId/speech", () => {
     const content = "😀".repeat(1200) + "b".repeat(1300);
     const contentVersion = speechVersionFor(content);
     fakeBookmark({ htmlContent: content });
-    synthesizeSpeechMock.mockResolvedValue(Buffer.from("RIFFxxxxWAVEyyyy"));
+    synthesizeAlignedSpeechMock.mockResolvedValue({
+      audio: Buffer.from("RIFFxxxxWAVEyyyy"),
+      timed: null,
+    });
     const app = buildBookmarkApp(sessionCtx);
 
     const texts: string[] = [];
@@ -583,7 +645,7 @@ describe("POST /bookmarks/:bookmarkId/speech", () => {
       });
 
       expect(response.status).toBe(200);
-      const lastCall = synthesizeSpeechMock.mock.calls.at(-1);
+      const lastCall = synthesizeAlignedSpeechMock.mock.calls.at(-1);
       expect(lastCall).toBeDefined();
       const text = lastCall![0] as string;
       expect(text.length).toBeGreaterThan(0);
@@ -625,6 +687,6 @@ describe("POST /bookmarks/:bookmarkId/speech", () => {
       error: "No more content to read.",
     });
 
-    expect(synthesizeSpeechMock).not.toHaveBeenCalled();
+    expect(synthesizeAlignedSpeechMock).not.toHaveBeenCalled();
   });
 });

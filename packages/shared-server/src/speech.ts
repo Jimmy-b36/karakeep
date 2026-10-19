@@ -1,5 +1,9 @@
 import serverConfig from "@karakeep/shared/config";
+import type { SpeechWord, TimedSpeech } from "@karakeep/shared/types/speech";
 import { zTimedSpeech, validSpeechWords } from "@karakeep/shared/types/speech";
+
+import type { AlignedWord } from "./speech-offsets";
+import { mapAlignedWords } from "./speech-offsets";
 
 export interface SpeechVoice {
   id: string;
@@ -43,6 +47,11 @@ const MAX_VOICE_LENGTH = 300;
 const MAX_AUDIO_BYTES = 32 * 1024 * 1024;
 const MAX_VOICES_RESPONSE_BYTES = 1024 * 1024;
 const WORKER_TIMEOUT_MS = 70_000;
+const ALIGN_TIMEOUT_MS = 90_000;
+const MAX_ALIGN_RESPONSE_BYTES = 1024 * 1024;
+const MAX_TIMED_AUDIO_BASE64 = 45_000_000;
+
+type WorkerKind = "speech" | "kokoro" | "align";
 
 export function resolveSpeechEndpoint(
   baseUrl: string | undefined,
@@ -137,11 +146,19 @@ async function readBodyCapped(
 async function workerRequest(
   path: string,
   body?: unknown,
-  kokoro = false,
+  kind: WorkerKind = "speech",
 ): Promise<Response> {
   const { url, token } = resolveSpeechEndpoint(
-    kokoro ? serverConfig.speech.kokoroUrl : serverConfig.speech.url,
-    kokoro ? serverConfig.speech.kokoroToken : serverConfig.speech.token,
+    kind === "kokoro"
+      ? serverConfig.speech.kokoroUrl
+      : kind === "align"
+        ? serverConfig.speech.alignUrl
+        : serverConfig.speech.url,
+    kind === "kokoro"
+      ? serverConfig.speech.kokoroToken
+      : kind === "align"
+        ? serverConfig.speech.alignToken
+        : serverConfig.speech.token,
     serverConfig.speech.allowPrivateHttp,
     path,
   );
@@ -157,7 +174,11 @@ async function workerRequest(
       body: body === undefined ? undefined : JSON.stringify(body),
       redirect: "error",
       signal: AbortSignal.timeout(
-        path === "/voices" ? 5000 : WORKER_TIMEOUT_MS,
+        path === "/voices"
+          ? 5000
+          : kind === "align"
+            ? ALIGN_TIMEOUT_MS
+            : WORKER_TIMEOUT_MS,
       ),
     });
   } catch {
@@ -211,7 +232,11 @@ export async function getSpeechVoices(): Promise<SpeechVoice[]> {
 }
 
 async function getWorkerVoices(kokoro: boolean): Promise<SpeechVoice[]> {
-  const response = await workerRequest("/voices", undefined, kokoro);
+  const response = await workerRequest(
+    "/voices",
+    undefined,
+    kokoro ? "kokoro" : "speech",
+  );
   const body = await readBodyCapped(response, MAX_VOICES_RESPONSE_BYTES);
 
   let parsed: unknown;
@@ -254,8 +279,12 @@ export async function synthesizeTimedSpeech(text: string, voice: string) {
   ) {
     throw new SpeechInvalidInputError("Invalid timed speech request.");
   }
-  const response = await workerRequest("/synthesize", { text, voice }, true);
-  const bytes = await readBodyCapped(response, 45_000_000);
+  const response = await workerRequest(
+    "/synthesize",
+    { text, voice },
+    "kokoro",
+  );
+  const bytes = await readBodyCapped(response, MAX_TIMED_AUDIO_BASE64);
   try {
     const value = zTimedSpeech.parse(JSON.parse(bytes.toString("utf8")));
     if (!validSpeechWords(value.words, text, value.duration))
@@ -276,6 +305,93 @@ export async function synthesizeTimedSpeech(text: string, voice: string) {
       "Local word-timed speech returned invalid audio or timings.",
     );
   }
+}
+
+function parseAlignedWords(value: unknown): AlignedWord[] | null {
+  if (!value || typeof value !== "object") return null;
+  const words = (value as { words?: unknown }).words;
+  if (!Array.isArray(words) || words.length === 0 || words.length > 2000)
+    return null;
+  const parsed: AlignedWord[] = [];
+  for (const item of words) {
+    if (!item || typeof item !== "object") return null;
+    const word = item as Record<string, unknown>;
+    if (
+      typeof word.word !== "string" ||
+      !word.word ||
+      typeof word.start !== "number" ||
+      typeof word.end !== "number" ||
+      !Number.isFinite(word.start) ||
+      !Number.isFinite(word.end) ||
+      word.start < 0 ||
+      word.end < word.start
+    ) {
+      return null;
+    }
+    parsed.push({ word: word.word, start: word.start, end: word.end });
+  }
+  return parsed;
+}
+
+export function alignedSpeechConfigured(): boolean {
+  return Boolean(
+    serverConfig.speech.alignUrl && serverConfig.speech.alignToken,
+  );
+}
+
+async function alignSpeech(
+  text: string,
+  audio: Buffer,
+): Promise<{ words: SpeechWord[]; duration: number } | null> {
+  try {
+    const response = await workerRequest(
+      "/align",
+      { text, wav: audio.toString("base64") },
+      "align",
+    );
+    const bytes = await readBodyCapped(response, MAX_ALIGN_RESPONSE_BYTES);
+    const value: unknown = JSON.parse(bytes.toString("utf8"));
+    if (!value || typeof value !== "object") return null;
+    const duration = (value as { duration?: unknown }).duration;
+    if (
+      typeof duration !== "number" ||
+      !Number.isFinite(duration) ||
+      duration <= 0 ||
+      duration > 600
+    ) {
+      return null;
+    }
+    const aligned = parseAlignedWords(value);
+    if (!aligned) return null;
+    const words = mapAlignedWords(text, aligned, duration);
+    if (!words || !validSpeechWords(words, text, duration)) return null;
+    return { words, duration };
+  } catch {
+    // Alignment is optional: never block or fail audio because it is unavailable.
+    return null;
+  }
+}
+
+/**
+ * Synthesizes untimed voices, then adds word timings when the local aligner is
+ * configured. Alignment failure degrades to plain WAV, preserving playback.
+ */
+export async function synthesizeAlignedSpeech(
+  text: string,
+  voice: string,
+): Promise<{ audio: Buffer; timed: TimedSpeech | null }> {
+  const audio = await synthesizeSpeech(text, voice);
+  if (!alignedSpeechConfigured()) return { audio, timed: null };
+  const aligned = await alignSpeech(text, audio);
+  if (!aligned) return { audio, timed: null };
+  return {
+    audio,
+    timed: {
+      audio: audio.toString("base64"),
+      words: aligned.words,
+      duration: aligned.duration,
+    },
+  };
 }
 
 export async function synthesizeSpeech(

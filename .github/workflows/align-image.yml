@@ -1,0 +1,66 @@
+name: Build local WhisperX alignment worker (ARM64)
+
+# Fork-specific workflow. Builds the isolated WhisperX alignment worker that adds
+# word timings to expressive Siri read-aloud audio. It never runs on the host.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 120
+    env:
+      IMAGE: ghcr.io/jimmy-b36/karakeep-align:sha-${{ github.sha }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build pinned offline worker
+        run: docker buildx build --platform linux/arm64 --file docker/align/Dockerfile --load --tag "${IMAGE}" .
+      - name: Offline worker smoke test
+        run: |
+          set -euo pipefail
+          TOKEN=synthetic-align-token-000000000000000000
+          docker run -d --name align-smoke --network none --cap-drop ALL --security-opt no-new-privileges \
+            --memory 1500m --cpus 1 --pids-limit 128 --read-only --tmpfs /tmp:rw,noexec,nosuid,size=64m \
+            -e REEDIT_ALIGN_TOKEN="${TOKEN}" "${IMAGE}"
+          docker exec -i align-smoke python - <<'PY'
+          import json, time, urllib.error, urllib.request
+          base = 'http://127.0.0.1:4319'
+          for attempt in range(90):
+              try:
+                  with urllib.request.urlopen(base + '/health', timeout=2) as response:
+                      health = json.load(response)
+                  if health.get('ready'):
+                      break
+              except (OSError, urllib.error.URLError):
+                  pass
+              time.sleep(1)
+          else:
+              raise RuntimeError('Worker model did not become ready')
+          try:
+              urllib.request.urlopen(base + '/align', data=b'{}', timeout=5)
+              raise RuntimeError('Unauthenticated alignment request was allowed')
+          except urllib.error.HTTPError as error:
+              assert error.code == 401, error.code
+          print('Offline authenticated worker health passed')
+          PY
+          docker stats --no-stream align-smoke
+      - name: Publish smoke-tested image
+        run: |
+          set -euo pipefail
+          docker push "${IMAGE}"
+          docker inspect --format '{{index .RepoDigests 0}}' "${IMAGE}" >> "$GITHUB_STEP_SUMMARY"
+      - name: Cleanup
+        if: always()
+        run: docker rm -f align-smoke || true

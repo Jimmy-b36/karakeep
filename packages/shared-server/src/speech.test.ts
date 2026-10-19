@@ -10,6 +10,8 @@ const { config } = vi.hoisted(() => ({
       allowPrivateHttp: false,
       kokoroUrl: undefined as string | undefined,
       kokoroToken: undefined as string | undefined,
+      alignUrl: undefined as string | undefined,
+      alignToken: undefined as string | undefined,
     },
   },
 }));
@@ -23,6 +25,7 @@ import {
   SpeechInvalidInputError,
   SpeechNotConfiguredError,
   SpeechUpstreamError,
+  synthesizeAlignedSpeech,
   synthesizeSpeech,
   synthesizeTimedSpeech,
 } from "./speech";
@@ -113,6 +116,78 @@ describe("synthesizeTimedSpeech", () => {
     } finally {
       config.speech.kokoroUrl = undefined;
       config.speech.kokoroToken = undefined;
+      await stub.close();
+    }
+  });
+});
+
+describe("synthesizeAlignedSpeech", () => {
+  it("adds mapped word offsets when the aligner is configured", async () => {
+    const stub = await startStub((req, res) => {
+      if (req.url === "/synthesize") {
+        res.writeHead(200, { "Content-Type": "audio/wav" });
+        res.end(wav());
+        return;
+      }
+      sendJson(res, 200, {
+        duration: 2,
+        words: [
+          { word: "Hello", start: 0, end: 0.4 },
+          { word: "world.", start: 0.5, end: 1 },
+        ],
+      });
+    });
+    config.speech.url = `http://127.0.0.1:${stub.port}`;
+    config.speech.token = "speech-token";
+    config.speech.alignUrl = `http://127.0.0.1:${stub.port}`;
+    config.speech.alignToken = "align-token";
+    try {
+      const result = await synthesizeAlignedSpeech("Hello world.", "voice-1");
+      expect(result.timed?.duration).toBe(2);
+      expect(result.timed?.words.map((word) => [word.from, word.to])).toEqual([
+        [0, 5],
+        [6, 12],
+      ]);
+      expect(stub.requests.map((request) => request.url)).toEqual([
+        "/synthesize",
+        "/align",
+      ]);
+      expect(stub.requests[1]?.authorization).toBe("Bearer align-token");
+    } finally {
+      config.speech.alignUrl = undefined;
+      config.speech.alignToken = undefined;
+      await stub.close();
+    }
+  });
+
+  it("returns untimed audio when the aligner is absent or rejects the words", async () => {
+    const stub = await startStub((_req, res) => {
+      if (_req.url === "/synthesize") {
+        res.writeHead(200, { "Content-Type": "audio/wav" });
+        res.end(wav());
+        return;
+      }
+      sendJson(res, 200, {
+        duration: 2,
+        words: [{ word: "missing", start: 0, end: 1 }],
+      });
+    });
+    config.speech.url = `http://127.0.0.1:${stub.port}`;
+    config.speech.token = "speech-token";
+    try {
+      const absent = await synthesizeAlignedSpeech("Hello world.", "voice-1");
+      expect(absent.timed).toBeNull();
+      config.speech.alignUrl = `http://127.0.0.1:${stub.port}`;
+      config.speech.alignToken = "align-token";
+      const unmatched = await synthesizeAlignedSpeech(
+        "Hello world.",
+        "voice-1",
+      );
+      expect(unmatched.timed).toBeNull();
+      expect(unmatched.audio.subarray(0, 4).toString("ascii")).toBe("RIFF");
+    } finally {
+      config.speech.alignUrl = undefined;
+      config.speech.alignToken = undefined;
       await stub.close();
     }
   });

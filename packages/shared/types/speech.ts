@@ -14,6 +14,7 @@ export const zTimedSpeech = z.object({
   words: z.array(zSpeechWord).min(1).max(2000),
   duration: z.number().finite().positive().max(600),
 });
+export type TimedSpeech = z.infer<typeof zTimedSpeech>;
 
 export function validSpeechWords(
   words: SpeechWord[],

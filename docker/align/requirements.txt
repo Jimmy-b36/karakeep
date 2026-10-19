@@ -1,0 +1,8 @@
+# Pinned dependencies for the containerized WhisperX alignment worker (native/align/).
+# linux/arm64 CPU-only wheels. Bump deliberately and re-audit (see VENDOR.md).
+torch==2.2.2
+torchaudio==2.2.2
+numpy==1.26.4
+pandas==2.2.2
+nltk==3.8.1
+ffmpeg-python==0.2.0

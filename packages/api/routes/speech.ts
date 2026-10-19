@@ -8,12 +8,13 @@ import { z } from "zod";
 import serverConfig from "@karakeep/shared/config";
 import { htmlToSpeechText } from "@karakeep/shared/utils/htmlUtils";
 import {
+  alignedSpeechConfigured,
   getSpeechVoices,
   SpeechBusyError,
   SpeechInvalidInputError,
   SpeechNotConfiguredError,
   SpeechUpstreamError,
-  synthesizeSpeech,
+  synthesizeAlignedSpeech,
   synthesizeTimedSpeech,
 } from "@karakeep/shared-server";
 import { BookmarkTypes } from "@karakeep/shared/types/bookmarks";
@@ -166,7 +167,7 @@ export const speechBookmarkRoutes = new Hono()
     }
 
     let maxChars = SPEECH_CHUNK_MAX_CHARS;
-    if (voice.startsWith("kokoro:")) {
+    if (voice.startsWith("kokoro:") || alignedSpeechConfigured()) {
       const characters = Array.from(speechText);
       maxChars = Math.min(400, characters.length - start);
       if (start + maxChars < characters.length) {
@@ -204,7 +205,13 @@ export const speechBookmarkRoutes = new Hono()
     if (voice.startsWith("kokoro:")) {
       return c.json(await synthesizeTimedSpeech(chunk.content, voice));
     }
-    const audio = await synthesizeSpeech(chunk.content, voice);
+    const { audio, timed } = await synthesizeAlignedSpeech(
+      chunk.content,
+      voice,
+    );
+    if (timed) {
+      return c.json(timed);
+    }
     c.header("Content-Type", "audio/wav");
     // Copy exact bytes: Buffer is Uint8Array<ArrayBufferLike>, not Hono's Data.
     return c.body(new Uint8Array(audio), 200);
