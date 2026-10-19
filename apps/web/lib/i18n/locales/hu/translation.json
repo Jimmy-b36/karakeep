@@ -98,6 +98,7 @@
         "reset_preview": "Előnézet visszaállítása",
         "mono": "Monospace",
         "line_height": "Sortávolság",
+        "speech_highlight_color": "Felolvasási kiemelés színe",
         "tooltip_default": "Olvasási beállítások",
         "title": "Olvasó beállításai",
         "serif": "Serif",

@@ -144,6 +144,7 @@
         "reset_preview": "Återställ förhandsvisning",
         "mono": "Monospace",
         "line_height": "Radhöjd",
+        "speech_highlight_color": "Markeringsfärg vid högläsning",
         "tooltip_default": "Läsningsinställningar",
         "title": "Läsarinställningar",
         "serif": "Serif",

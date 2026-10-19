@@ -163,6 +163,7 @@
         "font_family": "גופן",
         "font_size": "גודל גופן",
         "line_height": "גובה שורה",
+        "speech_highlight_color": "צבע ההדגשה בהקראה",
         "save_as_default": "שמירה כברירת מחדל",
         "clear_defaults": "ניקוי כל ברירות המחדל",
         "not_set": "לא מוגדר",

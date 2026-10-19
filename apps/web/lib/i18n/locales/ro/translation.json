@@ -163,6 +163,7 @@
         "font_family": "Familie font",
         "font_size": "Dimensiune font",
         "line_height": "Înălțime rând",
+        "speech_highlight_color": "Culoarea evidențierii la citirea cu voce tare",
         "save_as_default": "Salvează ca implicit",
         "clear_defaults": "Șterge toate valorile implicite",
         "not_set": "Nespecificat",

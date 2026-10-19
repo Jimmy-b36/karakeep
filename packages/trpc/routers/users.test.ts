@@ -228,6 +228,7 @@ describe("User Routes", () => {
       readerFontFamily: null,
       readerFontSize: null,
       readerLineHeight: null,
+      readerSpeechHighlightColor: null,
 
       // AI Settings
       autoSummarizationEnabled: null,
@@ -248,6 +249,7 @@ describe("User Routes", () => {
       readerFontFamily: "serif",
       readerFontSize: 12,
       readerLineHeight: 1.5,
+      readerSpeechHighlightColor: "#60a5fa",
 
       // AI Settings
       autoSummarizationEnabled: true,
@@ -270,6 +272,7 @@ describe("User Routes", () => {
       readerFontFamily: "serif",
       readerFontSize: 12,
       readerLineHeight: 1.5,
+      readerSpeechHighlightColor: "#60a5fa",
 
       // AI Settings
       autoSummarizationEnabled: true,
@@ -278,6 +281,16 @@ describe("User Routes", () => {
       inferredTagLang: "en",
       tagStyle: "lowercase-underscores",
     });
+
+    await expect(
+      caller.users.updateSettings({
+        readerSpeechHighlightColor: "not-a-color",
+      }),
+    ).rejects.toThrow();
+    await caller.users.updateSettings({ readerSpeechHighlightColor: null });
+    expect(
+      (await caller.users.settings()).readerSpeechHighlightColor,
+    ).toBeNull();
 
     // Test invalid update (e.g., empty input, if schema enforces it)
     await expect(() => caller.users.updateSettings({})).rejects.toThrow(

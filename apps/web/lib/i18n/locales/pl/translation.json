@@ -137,6 +137,7 @@
         "reset_preview": "Zresetuj podgląd",
         "mono": "Monospace",
         "line_height": "Wysokość linii",
+        "speech_highlight_color": "Kolor podświetlenia podczas czytania na głos",
         "tooltip_default": "Ustawienia czytania",
         "title": "Ustawienia czytnika",
         "serif": "Z szeryfami",

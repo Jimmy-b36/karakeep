@@ -148,6 +148,7 @@
         "reset_preview": "إعادة ضبط المعاينة",
         "mono": "Monospace",
         "line_height": "ارتفاع السطر",
+        "speech_highlight_color": "لون تمييز القراءة بصوت عالٍ",
         "tooltip_default": "إعدادات القراءة",
         "title": "إعدادات القارئ",
         "serif": "Serif",

@@ -253,6 +253,7 @@
         "reset_preview": "Resetovať ukážku",
         "mono": "Neproporcionálne",
         "line_height": "Výška riadku",
+        "speech_highlight_color": "Farba zvýraznenia pri čítaní nahlas",
         "tooltip_default": "Nastavenia čítania",
         "title": "Nastavenia čítačky",
         "serif": "Pätkové",

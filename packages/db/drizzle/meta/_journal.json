@@ -666,6 +666,13 @@
       "when": 1785711744217,
       "tag": "0094_migrate_to_better_auth",
       "breakpoints": true
+    },
+    {
+      "idx": 95,
+      "version": "6",
+      "when": 1792433639677,
+      "tag": "0095_reader_speech_highlight_color",
+      "breakpoints": true
     }
   ]
 }

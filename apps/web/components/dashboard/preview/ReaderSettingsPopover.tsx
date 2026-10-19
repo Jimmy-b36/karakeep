@@ -1,6 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Popover,
   PopoverContent,
@@ -397,6 +398,41 @@ export default function ReaderSettingsPopover({
                   <Plus className="size-3" />
                 </Button>
               </div>
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <label
+                  htmlFor="speech-highlight-color-preview"
+                  className="text-sm font-medium"
+                >
+                  {t("settings.info.reader_settings.speech_highlight_color")}
+                </label>
+                {hasLocalOverride("speechHighlightColor") &&
+                  sessionOverrides.speechHighlightColor === undefined && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-5 w-5 text-muted-foreground"
+                      aria-label={t(
+                        "settings.info.reader_settings.clear_override_hint",
+                        { value: getServerValue("speechHighlightColor") },
+                      )}
+                      onClick={() => clearLocalOverride("speechHighlightColor")}
+                    >
+                      <X className="size-3" />
+                    </Button>
+                  )}
+              </div>
+              <Input
+                id="speech-highlight-color-preview"
+                type="color"
+                value={settings.speechHighlightColor}
+                onChange={(event) =>
+                  updateSession({ speechHighlightColor: event.target.value })
+                }
+                className="h-9 cursor-pointer p-1"
+              />
             </div>
 
             {hasSessionChanges && (

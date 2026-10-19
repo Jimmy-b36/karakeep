@@ -145,6 +145,7 @@
         "reset_preview": "Réinitialiser l’aperçu",
         "mono": "Monospace",
         "line_height": "Hauteur de ligne",
+        "speech_highlight_color": "Couleur de surlignage de la lecture à voix haute",
         "tooltip_default": "Paramètres de lecture",
         "title": "Paramètres du lecteur",
         "serif": "Avec empattement",

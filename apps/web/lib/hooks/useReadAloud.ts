@@ -73,6 +73,8 @@ export function useReadAloud(bookmarkId: string, enabled: boolean) {
   const voiceRef = useRef<string | null>(voiceId);
   const speedRef = useRef<number>(speed);
   const voicesLoadedRef = useRef(false);
+  const voicesRequestRef = useRef<Promise<void> | null>(null);
+  const startRequestRef = useRef(0);
 
   voiceRef.current = voiceId;
   speedRef.current = speed;
@@ -126,41 +128,45 @@ export function useReadAloud(bookmarkId: string, enabled: boolean) {
   }, [snapshot.status, timedPlayback]);
 
   const loadVoices = useCallback(async () => {
-    if (voicesLoadedRef.current) {
-      return;
-    }
+    if (voicesRequestRef.current) return voicesRequestRef.current;
+    if (voicesLoadedRef.current) return;
     voicesLoadedRef.current = true;
     setVoicesStatus("loading");
     setVoicesError(null);
-    try {
-      const list = await fetchSpeechVoices();
-      const current = voiceRef.current;
-      const chosen =
-        current && list.some((voice) => voice.id === current)
-          ? current
-          : (list[0]?.id ?? null);
-      setVoices(list);
-      if (chosen !== current) {
-        setVoiceIdState(chosen);
-        voiceRef.current = chosen;
-        if (chosen) {
-          writeStoredValue(VOICE_STORAGE_KEY, chosen);
-          playerRef.current?.setVoice(chosen);
+    voicesRequestRef.current = (async () => {
+      try {
+        const list = await fetchSpeechVoices();
+        const current = voiceRef.current;
+        const chosen =
+          current && list.some((voice) => voice.id === current)
+            ? current
+            : (list[0]?.id ?? null);
+        setVoices(list);
+        if (chosen !== current) {
+          setVoiceIdState(chosen);
+          voiceRef.current = chosen;
+          if (chosen) {
+            writeStoredValue(VOICE_STORAGE_KEY, chosen);
+            playerRef.current?.setVoice(chosen);
+          }
         }
+        setVoicesStatus("ready");
+      } catch (error) {
+        voicesLoadedRef.current = false;
+        setVoicesError(
+          error instanceof ReadAloudError
+            ? error.info
+            : {
+                code: "network",
+                message: "Could not reach the local speech service.",
+              },
+        );
+        setVoicesStatus("error");
+      } finally {
+        voicesRequestRef.current = null;
       }
-      setVoicesStatus("ready");
-    } catch (error) {
-      voicesLoadedRef.current = false;
-      setVoicesError(
-        error instanceof ReadAloudError
-          ? error.info
-          : {
-              code: "network",
-              message: "Could not reach the local speech service.",
-            },
-      );
-      setVoicesStatus("error");
-    }
+    })();
+    return voicesRequestRef.current;
   }, []);
 
   const setVoice = useCallback((id: string) => {
@@ -176,11 +182,25 @@ export function useReadAloud(bookmarkId: string, enabled: boolean) {
   }, []);
 
   const start = useCallback(() => {
+    startRequestRef.current++;
     playerRef.current?.start();
   }, []);
-  const startAt = useCallback((offset: number) => {
-    playerRef.current?.startAt(offset);
-  }, []);
+  const startAt = useCallback(
+    async (offset: number) => {
+      const player = playerRef.current;
+      if (!player) return;
+      const request = ++startRequestRef.current;
+      await loadVoices();
+      if (
+        request === startRequestRef.current &&
+        playerRef.current === player &&
+        voicesLoadedRef.current &&
+        voiceRef.current
+      )
+        player.startAt(offset);
+    },
+    [loadVoices],
+  );
   const pause = useCallback(() => {
     playerRef.current?.pause();
   }, []);
@@ -188,6 +208,7 @@ export function useReadAloud(bookmarkId: string, enabled: boolean) {
     playerRef.current?.resume();
   }, []);
   const stop = useCallback(() => {
+    startRequestRef.current++;
     playerRef.current?.stop();
   }, []);
   const retry = useCallback(() => {

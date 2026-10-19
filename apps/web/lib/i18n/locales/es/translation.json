@@ -81,6 +81,7 @@
         "reset_preview": "Restablecer vista previa",
         "mono": "Monoespacio",
         "line_height": "Altura de la línea",
+        "speech_highlight_color": "Color de resaltado de la lectura en voz alta",
         "tooltip_default": "Ajustes de lectura",
         "title": "Ajustes del lector",
         "serif": "Con gracias",

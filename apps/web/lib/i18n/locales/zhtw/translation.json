@@ -145,6 +145,7 @@
         "reset_preview": "重設預覽",
         "mono": "等寬字體",
         "line_height": "行高",
+        "speech_highlight_color": "朗讀醒目提示顏色",
         "tooltip_default": "閱讀設定",
         "title": "閱讀器設定",
         "serif": "襯線體",

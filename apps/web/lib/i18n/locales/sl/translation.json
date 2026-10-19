@@ -158,6 +158,7 @@
         "reset_preview": "Ponastavi predogled",
         "mono": "Enoprostorska",
         "line_height": "Višina vrstice",
+        "speech_highlight_color": "Barva označevanja pri glasnem branju",
         "tooltip_default": "Nastavitve branja",
         "title": "Nastavitve bralnika",
         "serif": "Serif",

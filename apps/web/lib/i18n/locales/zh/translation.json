@@ -145,6 +145,7 @@
         "reset_preview": "重置预览",
         "mono": "等宽",
         "line_height": "行高",
+        "speech_highlight_color": "朗读高亮颜色",
         "tooltip_default": "阅读设置",
         "title": "阅读器设置",
         "serif": "衬线",

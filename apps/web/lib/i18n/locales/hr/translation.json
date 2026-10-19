@@ -318,6 +318,7 @@
         "reset_preview": "Resetiraj pregled",
         "mono": "Monospace",
         "line_height": "Visina retka",
+        "speech_highlight_color": "Boja isticanja pri čitanju naglas",
         "tooltip_default": "Postavke čitanja",
         "title": "Postavke čitača",
         "serif": "Serif",

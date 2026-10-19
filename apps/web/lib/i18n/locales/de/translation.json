@@ -145,6 +145,7 @@
         "reset_preview": "Vorschau zurücksetzen",
         "mono": "Monospace",
         "line_height": "Zeilenhöhe",
+        "speech_highlight_color": "Hervorhebungsfarbe beim Vorlesen",
         "tooltip_default": "Leseeinstellungen",
         "title": "Lesereinstellungen",
         "serif": "Serif",

@@ -16,6 +16,7 @@ export const UserSettingsContext = createContext<ZUserSettings>({
   readerFontSize: null,
   readerLineHeight: null,
   readerFontFamily: null,
+  readerSpeechHighlightColor: null,
   autoTaggingEnabled: null,
   autoSummarizationEnabled: null,
   tagStyle: "as-generated",

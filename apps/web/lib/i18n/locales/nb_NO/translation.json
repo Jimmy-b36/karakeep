@@ -317,6 +317,7 @@
         "reset_preview": "Tilbakestill forhåndsvisning",
         "mono": "Monospace",
         "line_height": "Linjehøyde",
+        "speech_highlight_color": "Uthevingsfarge ved høytlesing",
         "tooltip_default": "Leseinnstillinger",
         "title": "Leserinnstillinger",
         "serif": "Serif",

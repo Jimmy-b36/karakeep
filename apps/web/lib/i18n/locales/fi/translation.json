@@ -148,6 +148,7 @@
         "reset_preview": "Nollaa esikatselu",
         "mono": "Monospace",
         "line_height": "Rivikorkeus",
+        "speech_highlight_color": "Ääneenluvun korostusväri",
         "tooltip_default": "Lukemisen asetukset",
         "title": "Lukijan asetukset",
         "serif": "Serif",

@@ -271,6 +271,7 @@
         "reset_preview": "プレビューをリセット",
         "mono": "等幅",
         "line_height": "行の高さ",
+        "speech_highlight_color": "読み上げ時のハイライト色",
         "tooltip_default": "リーディング設定",
         "title": "リーダー設定",
         "serif": "セリフ",

@@ -304,6 +304,7 @@
         "reset_preview": "Voorbeeld resetten",
         "mono": "Monospace",
         "line_height": "Regelhoogte",
+        "speech_highlight_color": "Markeringskleur bij voorlezen",
         "tooltip_default": "Leesinstellingen",
         "title": "Lezerinstellingen",
         "serif": "Serif",

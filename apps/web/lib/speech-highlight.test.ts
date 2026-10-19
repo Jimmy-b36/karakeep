@@ -88,13 +88,32 @@ describe("speech offsets", () => {
 });
 
 describe("applySpeechHighlight", () => {
-  it("uses a soft padded rounded highlight", () => {
+  it("matches the opening chunk after leading article whitespace", () => {
+    const container = createContainer(
+      '<div class="page"><section>\n\t\n<p>Working with outside collaborators.</p>\n<p>A second paragraph.</p></section></div>',
+    );
+    applySpeechHighlight(container, "Working with outside collaborators.", {
+      from: 0,
+      to: 7,
+    });
+    expect(highlightedSpan(container)?.textContent).toBe("Working");
+  });
+
+  it("uses a soft rounded highlight without changing inline layout", () => {
     const container = createContainer("<p>Hello</p>");
     applySpeechHighlight(container, "Hello");
     const style = highlightedSpan(container)!.style;
     expect(style.background).toBe("rgba(250, 204, 21, 0.35)");
     expect(style.borderRadius).toBe("6px");
-    expect(style.padding).toBe("0.05em 0.2em");
+    expect(style.padding).toBe("");
+    expect(style.boxShadow).toBe("0 0 0 0.12em rgba(250,204,21,0.35)");
+  });
+  it("uses the chosen highlight color", () => {
+    const container = createContainer("<p>Hello</p>");
+    applySpeechHighlight(container, "Hello", undefined, "#60a5fa");
+    const style = highlightedSpan(container)!.style;
+    expect(style.background).toBe("rgba(96, 165, 250, 0.35)");
+    expect(style.boxShadow).toBe("0 0 0 0.12em rgba(96,165,250,0.35)");
   });
   it("maps a timed word after an explicit line break", () => {
     const container = createContainer("<p>Hello<br>world</p>");

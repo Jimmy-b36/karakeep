@@ -15,12 +15,14 @@ const html =
 function ReaderFixture({
   text,
   word,
+  color,
 }: {
   text: string | null;
   word?: { from: number; to: number };
+  color?: string;
 }) {
   const ref = useRef<HTMLDivElement>(null);
-  useSpeechHighlight(ref, text, word);
+  useSpeechHighlight(ref, text, word, color);
   return (
     <div ref={ref}>
       <BookmarkHTMLHighlighter htmlContent={html} highlights={[]} readOnly />
@@ -41,6 +43,20 @@ afterEach(() => {
 });
 
 describe("reader speech highlighting", () => {
+  it("updates the highlight color while the same word is playing", () => {
+    const word = { from: 0, to: 4 };
+    const text = htmlToSpeechText(html);
+    const { container, rerender } = render(
+      <ReaderFixture text={text} word={word} color="#facc15" />,
+    );
+    rerender(<ReaderFixture text={text} word={word} color="#60a5fa" />);
+    const highlight = container.querySelector<HTMLElement>(
+      "[data-speech-highlight]",
+    )!;
+    expect(highlight.textContent).toBe("Read");
+    expect(highlight.style.background).toBe("rgba(96, 165, 250, 0.35)");
+    expect(highlight.style.padding).toBe("");
+  });
   it("moves between exact words, including a word split by inline markup", () => {
     const text = htmlToSpeechText(html);
     const { container, rerender } = render(

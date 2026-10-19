@@ -104,6 +104,8 @@ export const users = sqliteTable("user", {
     enum: ["serif", "sans", "mono"],
   }),
 
+  readerSpeechHighlightColor: text("readerSpeechHighlightColor"),
+
   // AI Settings (nullable = opt-in, null means use server default)
   autoTaggingEnabled: integer("autoTaggingEnabled", { mode: "boolean" }),
   autoSummarizationEnabled: integer("autoSummarizationEnabled", {

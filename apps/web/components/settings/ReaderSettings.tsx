@@ -30,6 +30,7 @@ import {
   CollapsibleTrigger,
 } from "../ui/collapsible";
 import { Label } from "../ui/label";
+import { Input } from "../ui/input";
 import {
   Select,
   SelectContent,
@@ -64,7 +65,8 @@ export default function ReaderSettings() {
   const hasServerSettings =
     serverSettings.fontSize !== null ||
     serverSettings.lineHeight !== null ||
-    serverSettings.fontFamily !== null;
+    serverSettings.fontFamily !== null ||
+    serverSettings.speechHighlightColor != null;
 
   const handleClearDefaults = () => {
     clearServerDefaults();
@@ -80,7 +82,7 @@ export default function ReaderSettings() {
 
   // Format local override for display
   const formatLocalOverride = (
-    key: "fontSize" | "lineHeight" | "fontFamily",
+    key: "fontSize" | "lineHeight" | "fontFamily" | "speechHighlightColor",
   ) => {
     const value = localOverrides[key];
     if (value === undefined) return null;
@@ -148,6 +150,14 @@ export default function ReaderSettings() {
                         <li>
                           {t("settings.info.reader_settings.line_height")}:{" "}
                           {formatLocalOverride("lineHeight")}
+                        </li>
+                      )}
+                      {localOverrides.speechHighlightColor !== undefined && (
+                        <li>
+                          {t(
+                            "settings.info.reader_settings.speech_highlight_color",
+                          )}
+                          : {formatLocalOverride("speechHighlightColor")}
                         </li>
                       )}
                     </ul>
@@ -261,6 +271,30 @@ export default function ReaderSettings() {
                 max={READER_SETTING_CONSTRAINTS.lineHeight.max}
                 min={READER_SETTING_CONSTRAINTS.lineHeight.min}
                 step={READER_SETTING_CONSTRAINTS.lineHeight.step}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label
+                htmlFor="speech-highlight-color-default"
+                className="text-sm font-medium"
+              >
+                {t("settings.info.reader_settings.speech_highlight_color")}
+              </Label>
+              <Input
+                id="speech-highlight-color-default"
+                type="color"
+                disabled={!!clientConfig.demoMode}
+                value={
+                  serverSettings.speechHighlightColor ??
+                  READER_DEFAULTS.speechHighlightColor
+                }
+                onChange={(event) =>
+                  updateServerSetting({
+                    speechHighlightColor: event.target.value,
+                  })
+                }
+                className="h-11 cursor-pointer p-1"
               />
             </div>
 

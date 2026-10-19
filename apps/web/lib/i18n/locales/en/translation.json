@@ -165,6 +165,7 @@
         "font_family": "Font Family",
         "font_size": "Font Size",
         "line_height": "Line Height",
+        "speech_highlight_color": "Read-aloud highlight color",
         "save_as_default": "Save as default",
         "clear_defaults": "Clear all defaults",
         "not_set": "Not set",

@@ -224,6 +224,7 @@
         "reset_preview": "Restabelecer a vista previa",
         "mono": "Monoespazo",
         "line_height": "Alto de liña",
+        "speech_highlight_color": "Cor de realce da lectura en voz alta",
         "tooltip_default": "Axustes de lectura",
         "title": "Axustes do Reader",
         "serif": "Con serifas",

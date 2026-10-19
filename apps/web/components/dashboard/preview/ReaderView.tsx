@@ -1,6 +1,7 @@
 import { FullPageSpinner } from "@/components/ui/full-page-spinner";
 import { toast } from "@/components/ui/sonner";
 import { useTranslation } from "@/lib/i18n/client";
+import { useReaderSettings } from "@/lib/readerSettings";
 import {
   speechOffsetFromClick,
   speechOffsetFromKeyDown,
@@ -45,7 +46,13 @@ export default function ReaderView({
   const { t } = useTranslation();
   const api = useTRPC();
   const speechHighlightRef = useRef<HTMLElement>(null);
-  useSpeechHighlight(speechHighlightRef, speechText, speechWord);
+  const { settings } = useReaderSettings();
+  useSpeechHighlight(
+    speechHighlightRef,
+    speechText,
+    speechWord,
+    settings.speechHighlightColor,
+  );
   const { data: highlights } = useQuery(
     api.highlights.getForBookmark.queryOptions({
       bookmarkId,

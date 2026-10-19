@@ -149,6 +149,7 @@
         "reset_preview": "Önizlemeyi sıfırla",
         "mono": "Tek Aralık",
         "line_height": "Satır Yüksekliği",
+        "speech_highlight_color": "Sesli okuma vurgulama rengi",
         "tooltip_default": "Okuma ayarları",
         "title": "Okuyucu Ayarları",
         "serif": "Serif",

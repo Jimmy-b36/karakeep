@@ -137,6 +137,7 @@
         "reset_preview": "Redefinir visualização",
         "mono": "Monoespaçado",
         "line_height": "Altura da Linha",
+        "speech_highlight_color": "Cor de destaque da leitura em voz alta",
         "tooltip_default": "Configurações de leitura",
         "title": "Configurações do Leitor",
         "serif": "Serifa",

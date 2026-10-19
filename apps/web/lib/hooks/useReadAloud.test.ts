@@ -83,11 +83,79 @@ describe("useReadAloud voice selection", () => {
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
     expect(mocks.fetchSpeechChunk).toHaveBeenCalledWith(
-      expect.objectContaining({ start: 42 }),
+      expect.objectContaining({ start: 42, voice: "voice-a" }),
     );
     rerender({ enabled: false });
-    act(() => result.current.startAt(80));
+    await act(async () => {
+      await result.current.startAt(80);
+    });
     expect(mocks.fetchSpeechChunk).toHaveBeenCalledTimes(1);
+  });
+
+  it("uses the latest paragraph clicked while voices are loading", async () => {
+    let resolveVoices!: (
+      voices: { id: string; name: string; language: string }[],
+    ) => void;
+    mocks.fetchSpeechVoices.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveVoices = resolve;
+      }),
+    );
+    const { result } = renderHook(() => useReadAloud("bookmark-1", true));
+    let first!: Promise<void>;
+    let second!: Promise<void>;
+    act(() => {
+      first = result.current.startAt(10);
+      second = result.current.startAt(42);
+    });
+    expect(mocks.fetchSpeechChunk).not.toHaveBeenCalled();
+    await act(async () => {
+      resolveVoices([{ id: "voice-a", name: "Aaron", language: "en-US" }]);
+      await Promise.all([first, second]);
+    });
+    expect(mocks.fetchSpeechVoices).toHaveBeenCalledTimes(1);
+    expect(mocks.fetchSpeechChunk).toHaveBeenCalledTimes(1);
+    expect(mocks.fetchSpeechChunk).toHaveBeenCalledWith(
+      expect.objectContaining({ start: 42, voice: "voice-a" }),
+    );
+  });
+
+  it("does not start a pending click after stop", async () => {
+    let resolveVoices!: (
+      voices: { id: string; name: string; language: string }[],
+    ) => void;
+    mocks.fetchSpeechVoices.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveVoices = resolve;
+      }),
+    );
+    const { result } = renderHook(() => useReadAloud("bookmark-1", true));
+    let pending!: Promise<void>;
+    act(() => {
+      pending = result.current.startAt(42);
+    });
+    act(() => result.current.stop());
+    await act(async () => {
+      resolveVoices([{ id: "voice-a", name: "Aaron", language: "en-US" }]);
+      await pending;
+    });
+    expect(mocks.fetchSpeechChunk).not.toHaveBeenCalled();
+  });
+
+  it("does not play with an empty voice when loading fails, and retries on the next click", async () => {
+    mocks.fetchSpeechVoices.mockRejectedValueOnce(new Error("offline"));
+    const { result } = renderHook(() => useReadAloud("bookmark-1", true));
+    await act(async () => {
+      await result.current.startAt(42);
+    });
+    expect(mocks.fetchSpeechChunk).not.toHaveBeenCalled();
+    expect(result.current.voicesStatus).toBe("error");
+    await act(async () => {
+      await result.current.startAt(80);
+    });
+    expect(mocks.fetchSpeechChunk).toHaveBeenCalledWith(
+      expect.objectContaining({ start: 80, voice: "voice-a" }),
+    );
   });
 
   it("updates the active word from the audio clock on animation frames", async () => {

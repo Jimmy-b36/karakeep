@@ -148,6 +148,7 @@
         "reset_preview": "Επαναφορά προεπισκόπησης",
         "mono": "Monospace",
         "line_height": "Ύψος γραμμής",
+        "speech_highlight_color": "Χρώμα επισήμανσης κατά την εκφώνηση",
         "tooltip_default": "Ρυθμίσεις ανάγνωσης",
         "title": "Ρυθμίσεις ανάγνωσης",
         "serif": "Serif",

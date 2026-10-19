@@ -109,6 +109,7 @@
         "reset_preview": "Nulstil forhåndsvisning",
         "mono": "Monospace",
         "line_height": "Linjehøjde",
+        "speech_highlight_color": "Fremhævningsfarve ved højtlæsning",
         "tooltip_default": "Læseindstillinger",
         "title": "Læserindstillinger",
         "serif": "Serif",

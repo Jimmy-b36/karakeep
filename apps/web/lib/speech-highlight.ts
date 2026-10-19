@@ -3,6 +3,8 @@
 // page renders the original HTML, so matching is done on whitespace-normalized
 // text and never throws if the two representations drift apart.
 
+import { READER_DEFAULTS } from "@karakeep/shared/types/readers";
+
 interface RawPosition {
   node: Text;
   offset: number;
@@ -83,9 +85,9 @@ function buildNormalizedText(container: HTMLElement): NormalizedText {
       if (pendingSpace && parts.length > 0) {
         parts.push(" ");
         positions.push(spacePosition ?? { node, offset: index });
-        pendingSpace = false;
-        spacePosition = null;
       }
+      pendingSpace = false;
+      spacePosition = null;
       parts.push(character);
       positions.push({ node, offset: index });
     }
@@ -99,6 +101,7 @@ function highlightRange(
   normalized: NormalizedText,
   start: number,
   end: number,
+  color: string,
 ): void {
   const segments = new Map<Text, { start: number; end: number }>();
   for (const position of normalized.positions.slice(start, end)) {
@@ -113,6 +116,10 @@ function highlightRange(
     }
   }
 
+  const rgb = [1, 3, 5].map((start) =>
+    parseInt(color.slice(start, start + 2), 16),
+  );
+  const background = `rgba(${rgb.join(",")},0.35)`;
   let firstSpan: HTMLSpanElement | null = null;
   // Wrap text nodes separately: extracting a cross-block Range splits paragraphs.
   for (const [original, segment] of segments) {
@@ -121,9 +128,11 @@ function highlightRange(
     if (segment.start > 0) node = node.splitText(segment.start);
     const span = document.createElement("span");
     span.setAttribute("data-speech-highlight", "true");
-    span.style.background = "rgba(250,204,21,0.35)";
+    span.style.background = background;
     span.style.borderRadius = "6px";
-    span.style.padding = "0.05em 0.2em";
+    // Paint outside the word without changing line breaks or glyph positions.
+    span.style.boxShadow = `0 0 0 0.12em ${background}`;
+    span.style.boxDecorationBreak = "clone";
     node.replaceWith(span);
     span.appendChild(node);
     firstSpan ??= span;
@@ -140,6 +149,7 @@ export function applySpeechHighlight(
   container: HTMLElement | null,
   text: string | null | undefined,
   word?: { from: number; to: number } | null,
+  color: string = READER_DEFAULTS.speechHighlightColor,
 ): void {
   if (!container) {
     return;
@@ -162,7 +172,7 @@ export function applySpeechHighlight(
       ? matchIndex + prefix(word.to)
       : matchIndex + search.length;
     if (start < end && end <= matchIndex + search.length) {
-      highlightRange(container, normalized, start, end);
+      highlightRange(container, normalized, start, end, color);
     }
   } catch {
     // Highlighting is purely cosmetic; never interrupt read-aloud playback.

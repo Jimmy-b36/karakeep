@@ -71,7 +71,9 @@ export function useReaderSettings(options: UseReaderSettingsOptions) {
         Math.abs(
           (serverSettings.readerLineHeight ?? 0) - pendingServerSave.lineHeight,
         ) < 1e-6 &&
-        serverSettings.readerFontFamily === pendingServerSave.fontFamily;
+        serverSettings.readerFontFamily === pendingServerSave.fontFamily &&
+        serverSettings.readerSpeechHighlightColor ===
+          pendingServerSave.speechHighlightColor;
       if (serverMatches) {
         setPendingServerSave(null);
       }
@@ -127,6 +129,12 @@ export function useReaderSettings(options: UseReaderSettingsOptions) {
         pendingServerSave?.fontFamily ??
         serverSettings?.readerFontFamily ??
         READER_DEFAULTS.fontFamily,
+      speechHighlightColor:
+        sessionOverrides.speechHighlightColor ??
+        localOverrides.speechHighlightColor ??
+        pendingServerSave?.speechHighlightColor ??
+        serverSettings?.readerSpeechHighlightColor ??
+        READER_DEFAULTS.speechHighlightColor,
     }),
     [sessionOverrides, localOverrides, pendingServerSave, serverSettings],
   );
@@ -137,6 +145,8 @@ export function useReaderSettings(options: UseReaderSettingsOptions) {
       fontSize: serverSettings?.readerFontSize ?? undefined,
       lineHeight: serverSettings?.readerLineHeight ?? undefined,
       fontFamily: serverSettings?.readerFontFamily ?? undefined,
+      speechHighlightColor:
+        serverSettings?.readerSpeechHighlightColor ?? undefined,
     }),
     [serverSettings],
   );
@@ -178,6 +188,8 @@ export function useReaderSettings(options: UseReaderSettingsOptions) {
         fontSize: settingsToSave?.fontSize ?? settings.fontSize,
         lineHeight: settingsToSave?.lineHeight ?? settings.lineHeight,
         fontFamily: settingsToSave?.fontFamily ?? settings.fontFamily,
+        speechHighlightColor:
+          settingsToSave?.speechHighlightColor ?? settings.speechHighlightColor,
       };
       // Set pending state to prevent flicker while server syncs
       setPendingServerSave(toSave);
@@ -185,6 +197,7 @@ export function useReaderSettings(options: UseReaderSettingsOptions) {
         readerFontSize: toSave.fontSize,
         readerLineHeight: toSave.lineHeight,
         readerFontFamily: toSave.fontFamily,
+        readerSpeechHighlightColor: toSave.speechHighlightColor,
       });
     },
     [settings, saveServerSettings],
@@ -197,6 +210,7 @@ export function useReaderSettings(options: UseReaderSettingsOptions) {
         fontSize: "readerFontSize",
         lineHeight: "readerLineHeight",
         fontFamily: "readerFontFamily",
+        speechHighlightColor: "readerSpeechHighlightColor",
       } as const;
       updateServerSettings({ [serverKeyMap[key]]: null });
     },
@@ -209,6 +223,7 @@ export function useReaderSettings(options: UseReaderSettingsOptions) {
       readerFontSize: null,
       readerLineHeight: null,
       readerFontFamily: null,
+      readerSpeechHighlightColor: null,
     });
   }, [updateServerSettings]);
 
@@ -219,7 +234,8 @@ export function useReaderSettings(options: UseReaderSettingsOptions) {
   const hasServerDefaults =
     serverSettings?.readerFontSize != null ||
     serverSettings?.readerLineHeight != null ||
-    serverSettings?.readerFontFamily != null;
+    serverSettings?.readerFontFamily != null ||
+    serverSettings?.readerSpeechHighlightColor != null;
 
   return {
     // Current effective settings (what should be displayed)

@@ -143,6 +143,7 @@
         "reset_preview": "Ripristina l'anteprima",
         "mono": "Monospace",
         "line_height": "Altezza della linea",
+        "speech_highlight_color": "Colore di evidenziazione della lettura ad alta voce",
         "tooltip_default": "Impostazioni di lettura",
         "title": "Impostazioni lettore",
         "serif": "Serif",

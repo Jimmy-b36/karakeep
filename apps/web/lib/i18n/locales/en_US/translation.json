@@ -259,6 +259,7 @@
         "reset_preview": "Reset preview",
         "mono": "Monospace",
         "line_height": "Line Height",
+        "speech_highlight_color": "Read-aloud highlight color",
         "tooltip_default": "Reading settings",
         "title": "Reader Settings",
         "serif": "Serif",
