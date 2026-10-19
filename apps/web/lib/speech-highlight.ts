@@ -216,10 +216,16 @@ export function speechOffsetFromClick(
     event.metaKey ||
     event.shiftKey ||
     container.ownerDocument.getSelection()?.toString() ||
-    !(event.target instanceof Element) ||
-    event.target.closest(
-      'a,button,input,textarea,select,summary,[role="button"],[role="link"],[tabindex],[contenteditable]:not([contenteditable="false"]),[data-highlight]',
-    )
+    !(event.target instanceof Element)
+  )
+    return null;
+  const interactive = event.target.closest(
+    'a,button,input,textarea,select,summary,[role="button"],[role="link"],[tabindex],[contenteditable]:not([contenteditable="false"]),[data-highlight]',
+  );
+  if (
+    interactive &&
+    interactive !== container &&
+    container.contains(interactive)
   )
     return null;
   const block = event.target.closest("p,li,h1,h2,h3,h4,h5,h6,blockquote");

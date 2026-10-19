@@ -49,6 +49,8 @@ describe("speech offsets", () => {
     const container = createContainer(
       '<p>First</p><li><p><em>Second</em> <a href="#">link</a><button>button</button><span data-highlight>saved</span><span tabindex="0">focus</span></p></li>',
     );
+    // The real article wrapper is focusable for its Enter-to-read shortcut.
+    container.tabIndex = 0;
     const event = {
       target: container.querySelector("em"),
       defaultPrevented: false,

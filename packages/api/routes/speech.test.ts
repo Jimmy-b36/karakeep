@@ -246,7 +246,7 @@ describe("GET /speech/voices", () => {
 describe("POST /bookmarks/:bookmarkId/speech", () => {
   it("uses shorter word-boundary chunks for local timed speech", async () => {
     fakeBookmark({ htmlContent: "<p>" + "sample words ".repeat(80) + "</p>" });
-    synthesizeTimedSpeechMock.mockResolvedValueOnce({
+    synthesizeTimedSpeechMock.mockResolvedValue({
       audio: "test",
       duration: 1,
       words: [],
@@ -256,10 +256,22 @@ describe("POST /bookmarks/:bookmarkId/speech", () => {
     });
     expect(response.status).toBe(200);
     const text = synthesizeTimedSpeechMock.mock.calls[0][0] as string;
-    expect(Array.from(text).length).toBeLessThanOrEqual(400);
+    expect(Array.from(text).length).toBeLessThanOrEqual(160);
     expect(text.endsWith(" ")).toBe(true);
     expect(Number(response.headers.get("X-Speech-Next"))).toBe(
       Array.from(text).length,
+    );
+    const next = Number(response.headers.get("X-Speech-Next"));
+    const continuation = await postSpeech(buildBookmarkApp(sessionCtx), {
+      voice: "kokoro:af_heart",
+      start: next,
+      contentVersion: response.headers.get("X-Speech-Content-Version"),
+    });
+    expect(continuation.status).toBe(200);
+    const following = synthesizeTimedSpeechMock.mock.calls[1]![0] as string;
+    expect(Array.from(following).length).toBeLessThanOrEqual(160);
+    expect(text + following).toBe(
+      "sample words ".repeat(80).slice(0, next + following.length),
     );
   });
   it("denies timed synthesis to nonowners without contacting either worker", async () => {
@@ -509,10 +521,10 @@ describe("POST /bookmarks/:bookmarkId/speech", () => {
     );
   });
 
-  it("uses shorter word-boundary chunks when only the aligner provides timings", async () => {
+  it("starts aligned speech with a short chunk, then uses longer continuations without skipping text", async () => {
     alignedSpeechConfiguredMock.mockReturnValue(true);
     fakeBookmark({ htmlContent: "<p>" + "sample words ".repeat(80) + "</p>" });
-    synthesizeAlignedSpeechMock.mockResolvedValueOnce({
+    synthesizeAlignedSpeechMock.mockResolvedValue({
       audio: Buffer.from("RIFFxxxxWAVEyyyy"),
       timed: null,
     });
@@ -521,8 +533,21 @@ describe("POST /bookmarks/:bookmarkId/speech", () => {
     });
     expect(response.status).toBe(200);
     const text = synthesizeAlignedSpeechMock.mock.calls[0]![0] as string;
-    expect(Array.from(text).length).toBeLessThanOrEqual(400);
+    expect(Array.from(text).length).toBeLessThanOrEqual(160);
     expect(text.endsWith(" ")).toBe(true);
+    const next = Number(response.headers.get("X-Speech-Next"));
+    const continuation = await postSpeech(buildBookmarkApp(sessionCtx), {
+      voice: "voice-1",
+      start: next,
+      contentVersion: response.headers.get("X-Speech-Content-Version"),
+    });
+    expect(continuation.status).toBe(200);
+    const following = synthesizeAlignedSpeechMock.mock.calls[1]![0] as string;
+    expect(following.length).toBeGreaterThan(160);
+    expect(following.length).toBeLessThanOrEqual(400);
+    expect(text + following).toBe(
+      "sample words ".repeat(80).slice(0, next + following.length),
+    );
   });
 
   it.each([

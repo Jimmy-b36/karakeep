@@ -169,6 +169,10 @@ export function useReadAloud(bookmarkId: string, enabled: boolean) {
     return voicesRequestRef.current;
   }, []);
 
+  useEffect(() => {
+    if (enabled) void loadVoices();
+  }, [enabled, loadVoices]);
+
   const setVoice = useCallback((id: string) => {
     setVoiceIdState(id);
     writeStoredValue(VOICE_STORAGE_KEY, id);

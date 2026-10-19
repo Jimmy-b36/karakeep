@@ -73,6 +73,21 @@ describe("useReadAloud voice selection", () => {
     vi.unstubAllGlobals();
   });
 
+  it("preloads voices for eligible readers without generating audio", async () => {
+    const { result, rerender } = renderHook(
+      ({ enabled }) => useReadAloud("bookmark-1", enabled),
+      { initialProps: { enabled: false } },
+    );
+    expect(mocks.fetchSpeechVoices).not.toHaveBeenCalled();
+    rerender({ enabled: true });
+    await act(async () => {
+      await result.current.loadVoices();
+    });
+    expect(mocks.fetchSpeechVoices).toHaveBeenCalledTimes(1);
+    expect(result.current.voicesStatus).toBe("ready");
+    expect(mocks.fetchSpeechChunk).not.toHaveBeenCalled();
+  });
+
   it("exposes startAt and ignores jumps when disabled", async () => {
     const { result, rerender } = renderHook(
       ({ enabled }) => useReadAloud("bookmark-1", enabled),

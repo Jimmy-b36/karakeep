@@ -181,9 +181,12 @@ export const speechBookmarkRoutes = new Hono()
 
     let maxChars = SPEECH_CHUNK_MAX_CHARS;
     if (voice.startsWith("kokoro:") || alignedSpeechConfigured()) {
-      maxChars = Math.min(400, characters.length - start);
+      // Short first chunks reduce startup latency; keep Kokoro requests small throughout.
+      const limit =
+        voice.startsWith("kokoro:") || contentVersion === undefined ? 160 : 400;
+      maxChars = Math.min(limit, characters.length - start);
       if (start + maxChars < characters.length) {
-        for (let offset = maxChars - 1; offset >= 200; offset--) {
+        for (let offset = maxChars - 1; offset >= limit / 2; offset--) {
           if (/\s/.test(characters[start + offset]!)) {
             maxChars = offset + 1;
             break;
