@@ -290,7 +290,7 @@ The timed synthesis response is private JSON containing base64 WAV, duration and
 
 Apple's expressive Siri voices do not return timings. Build the pinned WhisperX worker from `docker/align/Dockerfile`, run it on the private service network (never publish its port), and set `REEDIT_ALIGN_URL`/`REEDIT_ALIGN_TOKEN` on Karakeep plus the same secret on the worker. Karakeep then force-aligns each already-generated Siri chunk locally and returns the same private timed JSON as Kokoro, so Siri gains per-word highlighting without leaving the machine.
 
-Alignment is optional and never blocks audio: if the worker is unset, unavailable, or returns tokens that do not reconstruct the text, Karakeep returns plain WAV and the reader keeps segment highlighting. The first chunk waits for its alignment pass; keeping chunks short bounds that wait, and repeat playback still re-synthesizes because speech audio is not cached.
+Alignment is optional and never fails audio: if the worker is unset, unavailable, or returns tokens that do not reconstruct the text, Karakeep returns plain WAV and the reader keeps segment highlighting. When the worker is configured, the first response waits for one local alignment pass before returning the timed JSON; keeping chunks short bounds that wait. Repeat playback still re-synthesizes because speech audio is not cached.
 
 ## Monitoring
 
