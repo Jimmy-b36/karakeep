@@ -1,0 +1,70 @@
+# Coolify deployment for reedit.jaffs.org. KARAKEEP_IMAGE is an immutable
+# ghcr.io/jimmy-b36/karakeep-read-aloud:sha-<commit> from read-aloud-image.yml.
+# Existing Reedit storage is deliberately not mounted into this application.
+services:
+  web:
+    image: ${KARAKEEP_IMAGE:?Set the tested immutable Karakeep image}
+    restart: unless-stopped
+    environment:
+      DATA_DIR: /data
+      PORT: 3000
+      NEXTAUTH_URL: https://reedit.jaffs.org
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:?Set an authentication secret}
+      DISABLE_SIGNUPS: "true"
+      MEILI_ADDR: http://search:7700
+      MEILI_MASTER_KEY: ${MEILI_MASTER_KEY:?Set a search secret}
+      BROWSER_WEB_URL: http://browser:9222
+      REEDIT_SPEECH_URL: ${REEDIT_SPEECH_URL}
+      REEDIT_SPEECH_TOKEN: ${REEDIT_SPEECH_TOKEN}
+      REEDIT_SPEECH_ALLOW_PRIVATE_HTTP: "true"
+      REEDIT_ALIGN_URL: http://align:4319
+      REEDIT_ALIGN_TOKEN: ${REEDIT_ALIGN_TOKEN}
+      KOKORO_SPEECH_URL: http://kokoro:4320
+      KOKORO_SPEECH_TOKEN: ${KOKORO_SPEECH_TOKEN}
+    volumes:
+      - karakeep-data:/data
+    networks:
+      - default
+      - speech
+      - proxy
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=coolify
+      - traefik.http.routers.reedit-karakeep.rule=Host(`reedit.jaffs.org`)
+      - traefik.http.routers.reedit-karakeep.entrypoints=http
+      - traefik.http.routers.reedit-karakeep.service=reedit-karakeep
+      - traefik.http.services.reedit-karakeep.loadbalancer.server.port=3000
+    healthcheck:
+      test: [CMD, curl, -fsS, http://127.0.0.1:3000/api/health]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+  browser:
+    image: ghcr.io/karakeep-app/karakeep-chrome:release
+    restart: unless-stopped
+    init: true
+    command:
+      - --disable-gpu
+      - --disable-dev-shm-usage
+      - --hide-scrollbars
+      - --disable-blink-features=AutomationControlled
+      - --window-size=1440,900
+  search:
+    image: getmeili/meilisearch:v1.41.0
+    restart: unless-stopped
+    environment:
+      MEILI_MASTER_KEY: ${MEILI_MASTER_KEY}
+      MEILI_NO_ANALYTICS: "true"
+    volumes:
+      - karakeep-search:/meili_data
+volumes:
+  karakeep-data:
+  karakeep-search:
+networks:
+  proxy:
+    external: true
+    name: coolify
+  speech:
+    external: true
+    name: h3badt1xbv8hwxtcd1ndfdwk_speech
