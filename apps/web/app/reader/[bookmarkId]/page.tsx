@@ -147,6 +147,14 @@ export default function ReaderViewPage() {
                           ? null
                           : readAloud.snapshot.currentText
                       }
+                      onSpeechJump={
+                        canReadAloud &&
+                        ["playing", "paused", "buffering"].includes(
+                          readAloud.snapshot.status,
+                        )
+                          ? readAloud.startAt
+                          : undefined
+                      }
                       speechWord={readAloud.snapshot.currentWord}
                     />
                   </div>

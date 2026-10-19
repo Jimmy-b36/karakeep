@@ -72,6 +72,39 @@ function setupPlayer() {
 }
 
 describe("ReadAloudPlayer", () => {
+  it("jumps, cancels the old session and continues from the server offset", async () => {
+    const { player, audio, fetchChunk, revokeObjectURL } = setupPlayer();
+    fetchChunk.mockResolvedValueOnce(chunk(10, "old"));
+    fetchChunk.mockResolvedValueOnce(chunk(null, "old"));
+    player.start();
+    await flush();
+    const signal = fetchChunk.mock.calls[1]![0].signal as AbortSignal;
+    fetchChunk.mockResolvedValueOnce(chunk(80, "new"));
+    fetchChunk.mockResolvedValueOnce(chunk(null, "new"));
+    player.startAt(42);
+    await flush();
+    expect(signal.aborted).toBe(true);
+    expect(revokeObjectURL).toHaveBeenCalledWith("blob:1");
+    expect(fetchChunk.mock.calls[2]![0]).toMatchObject({ start: 42 });
+    expect(fetchChunk.mock.calls[2]![0].contentVersion).toBeUndefined();
+    expect(fetchChunk.mock.calls[3]![0]).toMatchObject({
+      start: 80,
+      contentVersion: "new",
+    });
+    audio.onended?.(new Event("ended"));
+    await flush();
+    expect(fetchChunk).toHaveBeenCalledTimes(4);
+    expect(player.currentSnapshot.status).toBe("playing");
+  });
+
+  it.each([-1, NaN, Infinity, 1.5])(
+    "ignores invalid start offset %s",
+    (offset) => {
+      const { player, fetchChunk } = setupPlayer();
+      player.startAt(offset);
+      expect(fetchChunk).not.toHaveBeenCalled();
+    },
+  );
   it("highlights words by audio time, including seek, pause and silence", async () => {
     const { player, audio, fetchChunk } = setupPlayer();
     const words = [

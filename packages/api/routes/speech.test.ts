@@ -525,6 +525,40 @@ describe("POST /bookmarks/:bookmarkId/speech", () => {
     expect(text.endsWith(" ")).toBe(true);
   });
 
+  it.each([
+    [3, undefined, " world again"],
+    [6, undefined, "world again"],
+    [5, undefined, " world again"],
+    [3, true, "lo world again"],
+  ])(
+    "snaps only fresh mid-word starts (%s, version %s)",
+    async (start, versioned, expected) => {
+      const content = "Hello world again";
+      fakeBookmark({ htmlContent: content });
+      synthesizeAlignedSpeechMock.mockResolvedValue({
+        audio: Buffer.from("RIFFxxxxWAVEyyyy"),
+        timed: null,
+      });
+      const response = await postSpeech(buildBookmarkApp(sessionCtx), {
+        voice: "voice-1",
+        start,
+        ...(versioned ? { contentVersion: speechVersionFor(content) } : {}),
+      });
+      expect(response.status).toBe(200);
+      expect(synthesizeAlignedSpeechMock.mock.calls[0]![0]).toBe(expected);
+    },
+  );
+
+  it("returns no more content when snapping a final word reaches the end", async () => {
+    fakeBookmark({ htmlContent: "Hello" });
+    const response = await postSpeech(buildBookmarkApp(sessionCtx), {
+      voice: "voice-1",
+      start: 2,
+    });
+    expect(response.status).toBe(422);
+    expect(synthesizeAlignedSpeechMock).not.toHaveBeenCalled();
+  });
+
   it("renders LINK HTML as DOM-matching speech text", async () => {
     fakeBookmark({
       htmlContent:

@@ -383,10 +383,15 @@ export class ReadAloudPlayer {
   }
 
   start(): void {
+    this.startAt(0);
+  }
+
+  startAt(offset: number): void {
+    if (!Number.isSafeInteger(offset) || offset < 0) return;
     this.resetSession();
     this.sessionActive = true;
-    this.currentStart = 0;
-    this.nextOffset = 0;
+    this.currentStart = offset;
+    this.nextOffset = offset;
     this.version = null;
     void this.playNext(this.session);
   }

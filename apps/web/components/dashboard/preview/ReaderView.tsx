@@ -1,6 +1,10 @@
 import { FullPageSpinner } from "@/components/ui/full-page-spinner";
 import { toast } from "@/components/ui/sonner";
 import { useTranslation } from "@/lib/i18n/client";
+import {
+  speechOffsetFromClick,
+  speechOffsetFromKeyDown,
+} from "@/lib/speech-highlight";
 import { useSpeechHighlight } from "@/lib/hooks/useSpeechHighlight";
 import { useQuery } from "@tanstack/react-query";
 import { FileX } from "lucide-react";
@@ -27,18 +31,20 @@ export default function ReaderView({
   progressBarStyle,
   speechText,
   speechWord,
+  onSpeechJump,
 }: {
   bookmarkId: string;
   className?: string;
   style?: React.CSSProperties;
   readOnly: boolean;
   progressBarStyle?: React.CSSProperties;
+  onSpeechJump?: (offset: number) => void;
   speechText?: string | null;
   speechWord?: { from: number; to: number } | null;
 }) {
   const { t } = useTranslation();
   const api = useTRPC();
-  const speechHighlightRef = useRef<HTMLDivElement>(null);
+  const speechHighlightRef = useRef<HTMLElement>(null);
   useSpeechHighlight(speechHighlightRef, speechText, speechWord);
   const { data: highlights } = useQuery(
     api.highlights.getForBookmark.queryOptions({
@@ -157,7 +163,27 @@ export default function ReaderView({
             onDismiss={onDismiss}
           />
         )}
-        <div ref={speechHighlightRef}>
+        {/* Keep article semantics while exposing the paragraph speech shortcut to keyboard users. */}
+        {/* oxlint-disable-next-line jsx-a11y/no-noninteractive-element-interactions */}
+        <article
+          ref={speechHighlightRef}
+          // oxlint-disable-next-line jsx-a11y/no-noninteractive-tabindex
+          tabIndex={onSpeechJump ? 0 : undefined}
+          aria-keyshortcuts={onSpeechJump ? "Enter" : undefined}
+          onKeyDown={(event) => {
+            if (!onSpeechJump) return;
+            const offset = speechOffsetFromKeyDown(event.currentTarget, event);
+            if (offset !== null) {
+              event.preventDefault();
+              onSpeechJump(offset);
+            }
+          }}
+          onClick={(event) => {
+            if (!onSpeechJump) return;
+            const offset = speechOffsetFromClick(event.currentTarget, event);
+            if (offset !== null) onSpeechJump(offset);
+          }}
+        >
           <BookmarkHTMLHighlighter
             className={className}
             style={style}
@@ -187,7 +213,7 @@ export default function ReaderView({
               })
             }
           />
-        </div>
+        </article>
       </ScrollProgressTracker>
     );
   }

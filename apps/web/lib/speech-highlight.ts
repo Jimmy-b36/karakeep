@@ -121,8 +121,9 @@ function highlightRange(
     if (segment.start > 0) node = node.splitText(segment.start);
     const span = document.createElement("span");
     span.setAttribute("data-speech-highlight", "true");
-    span.style.background = "rgba(250,204,21,0.6)";
-    span.style.borderRadius = "2px";
+    span.style.background = "rgba(250,204,21,0.35)";
+    span.style.borderRadius = "6px";
+    span.style.padding = "0.05em 0.2em";
     node.replaceWith(span);
     span.appendChild(node);
     firstSpan ??= span;
@@ -166,4 +167,84 @@ export function applySpeechHighlight(
   } catch {
     // Highlighting is purely cosmetic; never interrupt read-aloud playback.
   }
+}
+
+// Approximate normalized offset; the server uses raw speech-text code points.
+export function speechOffsetBefore(
+  container: HTMLElement,
+  element: Element,
+): number | null {
+  if (!container.contains(element)) return null;
+  const normalized = buildNormalizedText(container);
+  const index = normalized.positions.findIndex(
+    (position, index) =>
+      element.contains(position.node) && normalized.text[index] !== " ",
+  );
+  return index < 0 ? null : Array.from(normalized.text.slice(0, index)).length;
+}
+
+export function speechOffsetFromClick(
+  container: HTMLElement,
+  event: Pick<
+    MouseEvent,
+    | "target"
+    | "defaultPrevented"
+    | "button"
+    | "detail"
+    | "altKey"
+    | "ctrlKey"
+    | "metaKey"
+    | "shiftKey"
+  >,
+): number | null {
+  if (
+    event.defaultPrevented ||
+    event.button !== 0 ||
+    event.detail === 0 ||
+    event.altKey ||
+    event.ctrlKey ||
+    event.metaKey ||
+    event.shiftKey ||
+    container.ownerDocument.getSelection()?.toString() ||
+    !(event.target instanceof Element) ||
+    event.target.closest(
+      'a,button,input,textarea,select,summary,[role="button"],[role="link"],[tabindex],[contenteditable]:not([contenteditable="false"]),[data-highlight]',
+    )
+  )
+    return null;
+  const block = event.target.closest("p,li,h1,h2,h3,h4,h5,h6,blockquote");
+  return block ? speechOffsetBefore(container, block) : null;
+}
+
+export function speechOffsetFromKeyDown(
+  container: HTMLElement,
+  event: Pick<
+    KeyboardEvent,
+    | "key"
+    | "target"
+    | "defaultPrevented"
+    | "altKey"
+    | "ctrlKey"
+    | "metaKey"
+    | "shiftKey"
+  >,
+): number | null {
+  if (
+    event.key !== "Enter" ||
+    event.target !== container ||
+    event.defaultPrevented ||
+    event.altKey ||
+    event.ctrlKey ||
+    event.metaKey ||
+    event.shiftKey
+  )
+    return null;
+  const anchor = container.ownerDocument.getSelection()?.anchorNode;
+  const element = anchor instanceof Element ? anchor : anchor?.parentElement;
+  const selectedBlock = element?.closest("p,li,h1,h2,h3,h4,h5,h6,blockquote");
+  const block =
+    selectedBlock && container.contains(selectedBlock)
+      ? selectedBlock
+      : container.querySelector("p,li,h1,h2,h3,h4,h5,h6,blockquote");
+  return block ? speechOffsetBefore(container, block) : null;
 }

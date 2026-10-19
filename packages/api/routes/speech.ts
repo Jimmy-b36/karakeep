@@ -138,7 +138,8 @@ export const speechBookmarkRoutes = new Hono()
     if (!parsed.success) {
       return c.json({ error: "Invalid request." }, 400);
     }
-    const { voice, start, contentVersion } = parsed.data;
+    const { voice, contentVersion } = parsed.data;
+    let { start } = parsed.data;
 
     const bookmarkId = c.req.param("bookmarkId");
     const bookmark = await Bookmark.fromId(c.var.ctx, bookmarkId, true);
@@ -166,9 +167,20 @@ export const speechBookmarkRoutes = new Hono()
       );
     }
 
+    const characters = Array.from(speechText);
+    // Snap approximate DOM starts, not versioned continuation offsets (which must not skip text).
+    if (
+      contentVersion === undefined &&
+      start > 0 &&
+      start < characters.length &&
+      !/\s/.test(characters[start - 1]!)
+    ) {
+      while (start < characters.length && !/\s/.test(characters[start]!))
+        start++;
+    }
+
     let maxChars = SPEECH_CHUNK_MAX_CHARS;
     if (voice.startsWith("kokoro:") || alignedSpeechConfigured()) {
-      const characters = Array.from(speechText);
       maxChars = Math.min(400, characters.length - start);
       if (start + maxChars < characters.length) {
         for (let offset = maxChars - 1; offset >= 200; offset--) {

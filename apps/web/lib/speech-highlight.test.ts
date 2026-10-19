@@ -2,7 +2,12 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { applySpeechHighlight } from "./speech-highlight";
+import {
+  applySpeechHighlight,
+  speechOffsetBefore,
+  speechOffsetFromClick,
+  speechOffsetFromKeyDown,
+} from "./speech-highlight";
 
 function createContainer(html: string): HTMLElement {
   const container = document.createElement("div");
@@ -23,7 +28,74 @@ beforeEach(() => {
   });
 });
 
+describe("speech offsets", () => {
+  it("counts normalized code points across nested and highlighted blocks", () => {
+    const container = createContainer(
+      "<p>😀  Hello<br>world</p><blockquote><p>Second <em>block</em></p></blockquote><p>  </p>",
+    );
+    const block = container.querySelector("blockquote p")!;
+    expect(speechOffsetBefore(container, block)).toBe(14);
+    applySpeechHighlight(container, "Second block");
+    expect(speechOffsetBefore(container, block)).toBe(14);
+    expect(
+      speechOffsetBefore(container, container.lastElementChild!),
+    ).toBeNull();
+    expect(
+      speechOffsetBefore(container, document.createElement("p")),
+    ).toBeNull();
+  });
+
+  it("only accepts plain pointer clicks on unselected text blocks", () => {
+    const container = createContainer(
+      '<p>First</p><li><p><em>Second</em> <a href="#">link</a><button>button</button><span data-highlight>saved</span><span tabindex="0">focus</span></p></li>',
+    );
+    const event = {
+      target: container.querySelector("em"),
+      defaultPrevented: false,
+      button: 0,
+      detail: 1,
+      altKey: false,
+      ctrlKey: false,
+      metaKey: false,
+      shiftKey: false,
+    };
+    expect(speechOffsetFromClick(container, event)).toBe(6);
+    for (const guard of [
+      { defaultPrevented: true },
+      { button: 1 },
+      { detail: 0 },
+      { altKey: true },
+      { ctrlKey: true },
+      { metaKey: true },
+      { shiftKey: true },
+      ...["a", "button", "[data-highlight]", "[tabindex]"].map((selector) => ({
+        target: container.querySelector(selector),
+      })),
+    ]) {
+      expect(
+        speechOffsetFromClick(container, { ...event, ...guard }),
+      ).toBeNull();
+    }
+    document.body.appendChild(container);
+    const selection = document.getSelection()!;
+    const range = document.createRange();
+    range.selectNodeContents(container.querySelector("em")!);
+    selection.addRange(range);
+    expect(speechOffsetFromClick(container, event)).toBeNull();
+    selection.removeAllRanges();
+    container.remove();
+  });
+});
+
 describe("applySpeechHighlight", () => {
+  it("uses a soft padded rounded highlight", () => {
+    const container = createContainer("<p>Hello</p>");
+    applySpeechHighlight(container, "Hello");
+    const style = highlightedSpan(container)!.style;
+    expect(style.background).toBe("rgba(250, 204, 21, 0.35)");
+    expect(style.borderRadius).toBe("6px");
+    expect(style.padding).toBe("0.05em 0.2em");
+  });
   it("maps a timed word after an explicit line break", () => {
     const container = createContainer("<p>Hello<br>world</p>");
     applySpeechHighlight(container, "Hello\nworld", { from: 6, to: 11 });
@@ -136,5 +208,45 @@ describe("applySpeechHighlight", () => {
 
     expect(() => applySpeechHighlight(container, "alt text")).not.toThrow();
     expect(highlightedSpan(container)).toBeNull();
+  });
+});
+
+describe("speechOffsetFromKeyDown", () => {
+  it("jumps to the selected paragraph or defaults to the first block", () => {
+    const container = createContainer(
+      "<p>First</p><p>Second <a href='/'>link</a></p>",
+    );
+    document.body.append(container);
+    const event = new KeyboardEvent("keydown", { key: "Enter" });
+    const input = {
+      ...event,
+      key: "Enter",
+      target: container,
+      defaultPrevented: false,
+      altKey: false,
+      ctrlKey: false,
+      metaKey: false,
+      shiftKey: false,
+    };
+    const selection = document.getSelection()!;
+    selection.removeAllRanges();
+    expect(speechOffsetFromKeyDown(container, input)).toBe(0);
+    selection.collapse(container.lastElementChild!.firstChild, 2);
+    expect(speechOffsetFromKeyDown(container, input)).toBe(6);
+    for (const guard of [
+      { key: " " },
+      { defaultPrevented: true },
+      { target: container.querySelector("a") },
+      { altKey: true },
+      { ctrlKey: true },
+      { metaKey: true },
+      { shiftKey: true },
+    ]) {
+      expect(
+        speechOffsetFromKeyDown(container, { ...input, ...guard }),
+      ).toBeNull();
+    }
+    selection.removeAllRanges();
+    container.remove();
   });
 });

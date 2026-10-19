@@ -73,6 +73,23 @@ describe("useReadAloud voice selection", () => {
     vi.unstubAllGlobals();
   });
 
+  it("exposes startAt and ignores jumps when disabled", async () => {
+    const { result, rerender } = renderHook(
+      ({ enabled }) => useReadAloud("bookmark-1", enabled),
+      { initialProps: { enabled: true } },
+    );
+    await act(async () => {
+      result.current.startAt(42);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(mocks.fetchSpeechChunk).toHaveBeenCalledWith(
+      expect.objectContaining({ start: 42 }),
+    );
+    rerender({ enabled: false });
+    act(() => result.current.startAt(80));
+    expect(mocks.fetchSpeechChunk).toHaveBeenCalledTimes(1);
+  });
+
   it("updates the active word from the audio clock on animation frames", async () => {
     const frames: FrameRequestCallback[] = [];
     vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {

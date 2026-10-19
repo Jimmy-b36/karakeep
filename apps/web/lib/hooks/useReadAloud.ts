@@ -178,6 +178,9 @@ export function useReadAloud(bookmarkId: string, enabled: boolean) {
   const start = useCallback(() => {
     playerRef.current?.start();
   }, []);
+  const startAt = useCallback((offset: number) => {
+    playerRef.current?.startAt(offset);
+  }, []);
   const pause = useCallback(() => {
     playerRef.current?.pause();
   }, []);
@@ -202,6 +205,7 @@ export function useReadAloud(bookmarkId: string, enabled: boolean) {
     setSpeed,
     loadVoices,
     start,
+    startAt,
     pause,
     resume,
     stop,
