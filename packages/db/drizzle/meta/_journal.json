@@ -673,6 +673,13 @@
       "when": 1792433639677,
       "tag": "0095_reader_speech_highlight_color",
       "breakpoints": true
+    },
+    {
+      "idx": 96,
+      "version": "6",
+      "when": 1792503266145,
+      "tag": "0096_separate_rss_library",
+      "breakpoints": true
     }
   ]
 }

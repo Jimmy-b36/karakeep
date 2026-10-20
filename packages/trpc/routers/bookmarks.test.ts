@@ -14,6 +14,7 @@ import { BookmarkTypes } from "@karakeep/shared/types/bookmarks";
 
 import { WebhooksService } from "../models/webhooks.service";
 import type { APICallerType, CustomTestContext } from "../testUtils";
+import type { ZCursor } from "@karakeep/shared/types/pagination";
 import {
   defaultBeforeEach,
   getApiKeyCallerForPlainKey,
@@ -1857,5 +1858,370 @@ describe("Bookmark Routes", () => {
       });
       expect(result.bookmarkId).toBeNull();
     });
+  });
+});
+
+describe("RSS library separation", () => {
+  test<CustomTestContext>("RSS creation produces an unsaved bookmark; ordinary creation produces a library bookmark", async ({
+    apiCallers,
+  }) => {
+    const api = apiCallers[0].bookmarks;
+    const rss = await api.createBookmark({
+      url: "https://example.com/rss-article",
+      type: BookmarkTypes.LINK,
+      source: "rss",
+    });
+    const manual = await api.createBookmark({
+      url: "https://example.com/manual",
+      type: BookmarkTypes.LINK,
+    });
+    expect(rss.inLibrary).toBe(false);
+    expect(manual.inLibrary).toBe(true);
+  });
+
+  test<CustomTestContext>("library filter (Home) excludes unsaved RSS, includes saved and manual, excludes archived", async ({
+    apiCallers,
+  }) => {
+    const api = apiCallers[0].bookmarks;
+    const rss = await api.createBookmark({
+      url: "https://example.com/rss-article",
+      type: BookmarkTypes.LINK,
+      source: "rss",
+    });
+    const manual = await api.createBookmark({
+      url: "https://example.com/manual",
+      type: BookmarkTypes.LINK,
+    });
+
+    const home = await api.getBookmarks({ archived: false, inLibrary: true });
+    expect(home.bookmarks.map((b) => b.id)).not.toContain(rss.id);
+    expect(home.bookmarks.map((b) => b.id)).toContain(manual.id);
+
+    await api.saveToLibrary({ bookmarkId: rss.id });
+    await api.updateBookmark({ bookmarkId: manual.id, archived: true });
+
+    const homeAfter = await api.getBookmarks({
+      archived: false,
+      inLibrary: true,
+    });
+    expect(homeAfter.bookmarks.map((b) => b.id)).toContain(rss.id);
+    expect(homeAfter.bookmarks.map((b) => b.id)).not.toContain(manual.id);
+  });
+
+  test<CustomTestContext>("rssOnly aggregate filter: RSS-origin, association-only, dedup, ownership", async ({
+    apiCallers,
+    db,
+  }) => {
+    const api = apiCallers[0].bookmarks;
+    const other = apiCallers[1].bookmarks;
+
+    const rssOrigin = await api.createBookmark({
+      url: "https://example.com/rss-origin",
+      type: BookmarkTypes.LINK,
+      source: "rss",
+    });
+    // Manually saved bookmark that feeds also import (association-only).
+    const associationOnly = await api.createBookmark({
+      url: "https://example.com/association-only",
+      type: BookmarkTypes.LINK,
+    });
+    const feedId1 = await apiCallers[0].feeds.create({
+      name: "feed-1",
+      url: "https://rss.example.com/feed1.xml",
+      enabled: true,
+    });
+    const feedId2 = await apiCallers[0].feeds.create({
+      name: "feed-2",
+      url: "https://rss.example.com/feed2.xml",
+      enabled: true,
+    });
+    await db.insert(rssFeedImportsTable).values([
+      {
+        rssFeedId: feedId1.id,
+        entryId: "entry-1",
+        bookmarkId: associationOnly.id,
+      },
+      {
+        rssFeedId: feedId2.id,
+        entryId: "entry-2",
+        bookmarkId: associationOnly.id,
+      },
+    ]);
+    // Unrelated manual bookmark must not appear.
+    const unrelated = await api.createBookmark({
+      url: "https://example.com/unrelated",
+      type: BookmarkTypes.LINK,
+    });
+    // Another user's RSS bookmark must not appear.
+    await other.createBookmark({
+      url: "https://example.com/other-user",
+      type: BookmarkTypes.LINK,
+      source: "rss",
+    });
+
+    for (const sortOrder of ["desc", "asc"] as const) {
+      const rss = await api.getBookmarks({ rssOnly: true, sortOrder });
+      const ids = rss.bookmarks.map((b) => b.id);
+      expect(ids).toContain(rssOrigin.id);
+      expect(ids).toContain(associationOnly.id);
+      // Articles shared by multiple feeds appear exactly once.
+      expect(ids.filter((id) => id === associationOnly.id).length).toEqual(1);
+      expect(ids).not.toContain(unrelated.id);
+      // Owner restriction: no bookmark owned by user 2.
+      for (const id of ids) {
+        expect(ids).not.toContain(
+          (await other.getBookmark({ bookmarkId: id }).catch(() => null))?.id,
+        );
+      }
+    }
+  });
+
+  test<CustomTestContext>("saveToLibrary is idempotent, promotes into Home under the same ID, and is forbidden across users", async ({
+    apiCallers,
+  }) => {
+    const api = apiCallers[0].bookmarks;
+    const other = apiCallers[1].bookmarks;
+    const rss = await api.createBookmark({
+      url: "https://example.com/rss-article",
+      type: BookmarkTypes.LINK,
+      source: "rss",
+    });
+
+    const saved = await api.saveToLibrary({ bookmarkId: rss.id });
+    expect(saved).toEqual({ id: rss.id, inLibrary: true });
+
+    const afterSave = await api.getBookmark({ bookmarkId: rss.id });
+    expect(afterSave.inLibrary).toBe(true);
+    expect(afterSave.source).toEqual("rss");
+    const savedCreatedAt = afterSave.createdAt;
+
+    await new Promise((r) => setTimeout(r, 1100));
+    const again = await api.saveToLibrary({ bookmarkId: rss.id });
+    expect(again).toEqual({ id: rss.id, inLibrary: true });
+    const afterAgain = await api.getBookmark({ bookmarkId: rss.id });
+    // Idempotent: timestamps untouched on the second save.
+    expect(afterAgain.createdAt).toEqual(savedCreatedAt);
+
+    // Still visible on Home under the same bookmark ID.
+    const home = await api.getBookmarks({ archived: false, inLibrary: true });
+    expect(home.bookmarks.map((b) => b.id)).toContain(rss.id);
+
+    await expect(
+      other.saveToLibrary({ bookmarkId: rss.id }),
+    ).rejects.toThrowError();
+  });
+
+  test<CustomTestContext>("RSS/import re-save neither demotes a saved bookmark nor refreshes timestamps; manual re-save promotes", async ({
+    apiCallers,
+  }) => {
+    const api = apiCallers[0].bookmarks;
+    const rss = await api.createBookmark({
+      url: "https://example.com/rss-article",
+      type: BookmarkTypes.LINK,
+      source: "rss",
+    });
+    const originalCreatedAt = (await api.getBookmark({ bookmarkId: rss.id }))
+      .createdAt;
+
+    // RSS re-import: no-op, stays unsaved, timestamps unchanged.
+    const redone = await api.createBookmark({
+      url: "https://example.com/rss-article",
+      type: BookmarkTypes.LINK,
+      source: "rss",
+    });
+    expect(redone.id).toEqual(rss.id);
+    expect(redone.alreadyExists).toBe(true);
+    expect(redone.inLibrary).toBe(false);
+    expect(redone.createdAt).toEqual(originalCreatedAt);
+
+    await api.saveToLibrary({ bookmarkId: rss.id });
+
+    // RSS re-import after saving: membership retained, timestamps unchanged.
+    const redoneAfterSave = await api.createBookmark({
+      url: "https://example.com/rss-article",
+      type: BookmarkTypes.LINK,
+      source: "rss",
+    });
+    expect(redoneAfterSave.id).toEqual(rss.id);
+    expect(redoneAfterSave.inLibrary).toBe(true);
+    expect(redoneAfterSave.createdAt).toEqual(originalCreatedAt);
+
+    // Manual URL re-save of an unsaved RSS bookmark promotes it.
+    const unsaved = await api.createBookmark({
+      url: "https://example.com/other-rss-article",
+      type: BookmarkTypes.LINK,
+      source: "rss",
+    });
+    const manualResave = await api.createBookmark({
+      url: "https://example.com/other-rss-article",
+      type: BookmarkTypes.LINK,
+    });
+    expect(manualResave.id).toEqual(unsaved.id);
+    expect(manualResave.inLibrary).toBe(true);
+  });
+
+  test<CustomTestContext>("unfiltered getBookmarks keeps backwards compatibility; rssOnly cannot combine with other strategies", async ({
+    apiCallers,
+  }) => {
+    const api = apiCallers[0].bookmarks;
+    await api.createBookmark({
+      url: "https://example.com/rss-article",
+      type: BookmarkTypes.LINK,
+      source: "rss",
+    });
+    await api.createBookmark({
+      url: "https://example.com/manual",
+      type: BookmarkTypes.LINK,
+    });
+
+    // Omitted filters return everything, as before.
+    const all = await api.getBookmarks({});
+    expect(all.bookmarks.length).toEqual(2);
+
+    await expect(
+      api.getBookmarks({ rssOnly: true, rssFeedId: "someFeed" }),
+    ).rejects.toThrowError();
+  });
+
+  test<CustomTestContext>("RSS-origin articles remain discoverable after the subscription is deleted", async ({
+    apiCallers,
+    db,
+  }) => {
+    const api = apiCallers[0].bookmarks;
+    const rss = await api.createBookmark({
+      url: "https://example.com/rss-article",
+      type: BookmarkTypes.LINK,
+      source: "rss",
+    });
+    const feed = await apiCallers[0].feeds.create({
+      name: "feed-del",
+      url: "https://rss.example.com/feed.xml",
+      enabled: true,
+    });
+    await db
+      .insert(rssFeedImportsTable)
+      .values({ rssFeedId: feed.id, entryId: "entry-del", bookmarkId: rss.id });
+    await apiCallers[0].feeds.delete({ feedId: feed.id });
+
+    const rssBoard = await api.getBookmarks({ rssOnly: true });
+    expect(rssBoard.bookmarks.map((b) => b.id)).toContain(rss.id);
+
+    // Unsaved imported articles never leak into Home, even without a feed.
+    const home = await api.getBookmarks({ archived: false, inLibrary: true });
+    expect(home.bookmarks.map((b) => b.id)).not.toContain(rss.id);
+  });
+
+  test<CustomTestContext>("rssOnly cursor pagination returns every match exactly once and terminates, in both sort orders", async ({
+    apiCallers,
+    db,
+  }) => {
+    const api = apiCallers[0].bookmarks;
+    const other = apiCallers[1].bookmarks;
+
+    const feedId = (
+      await apiCallers[0].feeds.create({
+        name: "feed-page",
+        url: "https://rss.example.com/feed-page.xml",
+        enabled: true,
+      })
+    ).id;
+    const otherFeedId = (
+      await apiCallers[0].feeds.create({
+        name: "feed-page-2",
+        url: "https://rss.example.com/feed-page-2.xml",
+        enabled: true,
+      })
+    ).id;
+
+    const base = Date.parse("2026-01-01T00:00:00Z");
+    let seq = 0;
+    async function createRssArticle(createdAtMs: number) {
+      const id = (
+        await api.createBookmark({
+          url: `https://example.com/page-${seq++}`,
+          type: BookmarkTypes.LINK,
+          source: "rss",
+        })
+      ).id;
+      await db
+        .update(bookmarks)
+        .set({ createdAt: new Date(createdAtMs) })
+        .where(eq(bookmarks.id, id));
+      return id;
+    }
+
+    // Distinct timestamps, with unrelated manual bookmarks interleaved.
+    const expected: string[] = [];
+    const manualIds: string[] = [];
+    for (let i = 0; i < 5; i++) {
+      expected.push(await createRssArticle(base + i * 1000));
+      manualIds.push(
+        (
+          await api.createBookmark({
+            url: `https://example.com/manual-${i}`,
+            type: BookmarkTypes.LINK,
+          })
+        ).id,
+      );
+    }
+    // Association-only manual bookmark (in library, but feed-imported).
+    const associationOnly = (
+      await api.createBookmark({
+        url: "https://example.com/association-only-page",
+        type: BookmarkTypes.LINK,
+      })
+    ).id;
+    await db.insert(rssFeedImportsTable).values({
+      rssFeedId: feedId,
+      entryId: "entry-a",
+      bookmarkId: associationOnly,
+    });
+    expected.push(associationOnly);
+    // Multi-feed association must not duplicate the bookmark across pages.
+    const multiFeed = (
+      await api.createBookmark({
+        url: "https://example.com/multi-feed-page",
+        type: BookmarkTypes.LINK,
+      })
+    ).id;
+    await db.insert(rssFeedImportsTable).values([
+      { rssFeedId: feedId, entryId: "entry-b", bookmarkId: multiFeed },
+      { rssFeedId: otherFeedId, entryId: "entry-c", bookmarkId: multiFeed },
+    ]);
+    expected.push(multiFeed);
+    // Tied timestamps (same createdAt) to exercise the tie-break cursor path.
+    const tiedBase = base + 10_000;
+    expected.push(await createRssArticle(tiedBase));
+    expected.push(await createRssArticle(tiedBase));
+    expected.push(await createRssArticle(tiedBase));
+    // Another user's RSS bookmark must never appear.
+    await other.createBookmark({
+      url: "https://example.com/other-user-page",
+      type: BookmarkTypes.LINK,
+      source: "rss",
+    });
+
+    for (const sortOrder of ["desc", "asc"] as const) {
+      const collected: string[] = [];
+      let cursor: ZCursor | undefined;
+      let pages = 0;
+      for (;;) {
+        const page = await api.getBookmarks({
+          rssOnly: true,
+          limit: 2,
+          sortOrder,
+          cursor,
+        });
+        collected.push(...page.bookmarks.map((b) => b.id));
+        pages++;
+        if (!page.nextCursor) break;
+        cursor = page.nextCursor;
+        assert(pages < 20, "pagination did not terminate");
+      }
+      expect(pages).toBeGreaterThan(1);
+      // Every expected id appears exactly once; nothing else leaks in.
+      expect([...collected].sort()).toEqual([...expected].sort());
+      expect(new Set(collected).size).toEqual(collected.length);
+    }
   });
 });

@@ -23,6 +23,7 @@
     "video": "视频",
     "archive": "归档",
     "home": "主页",
+    "rss": "订阅",
     "highlights": "高亮",
     "source": "来源",
     "bookmark_types": {
@@ -70,6 +71,8 @@
     "manage_lists": "管理列表",
     "remove_from_list": "从列表中移除",
     "save": "保存",
+    "save_to_library": "保存到资料库",
+    "saved_to_library": "已保存到资料库",
     "add": "添加",
     "edit": "编辑",
     "create": "创建",
@@ -1011,6 +1014,7 @@
   "toasts": {
     "bookmarks": {
       "updated": "书签已更新！",
+      "saved_to_library": "书签已保存到资料库！",
       "deleted": "书签已删除！",
       "refetch": "重新获取已排队！",
       "full_page_archive": "已触发完整页面归档创建",
@@ -1032,6 +1036,10 @@
       "updated": "标签已更新！",
       "failed_to_update": "更新标签失败"
     }
+  },
+  "feeds": {
+    "all_feeds": "所有订阅",
+    "manage_feeds": "管理订阅"
   },
   "cleanups": {
     "cleanups": "清理",
@@ -1114,6 +1122,14 @@
     "no_bookmarks": {
       "title": "还没有书签",
       "description": "保存你感兴趣的文章、链接和页面，以便稍后快速访问。"
+    },
+    "no_subscriptions": {
+      "title": "还没有 RSS 订阅",
+      "description": "订阅 RSS 源，新文章会自动显示在这里。"
+    },
+    "no_feed_articles": {
+      "title": "还没有来自订阅源的文章",
+      "description": "订阅的新文章在抓取后会显示在这里。"
     }
   },
   "bookmark_editor": {

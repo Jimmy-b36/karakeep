@@ -23,6 +23,7 @@
     "video": "影片",
     "archive": "封存",
     "home": "首頁",
+    "rss": "訂閱",
     "highlights": "標記重點",
     "source": "來源",
     "bookmark_types": {
@@ -70,6 +71,8 @@
     "manage_lists": "管理清單",
     "remove_from_list": "從清單移除",
     "save": "儲存",
+    "save_to_library": "儲存到資料庫",
+    "saved_to_library": "已儲存到資料庫",
     "add": "新增",
     "edit": "編輯",
     "create": "建立",
@@ -1011,6 +1014,7 @@
   "toasts": {
     "bookmarks": {
       "updated": "書籤已更新！",
+      "saved_to_library": "書籤已儲存到資料庫！",
       "deleted": "書籤已刪除！",
       "refetch": "已將重新抓取加入佇列！",
       "full_page_archive": "已觸發完整網頁封存建立",
@@ -1032,6 +1036,10 @@
       "updated": "標籤已更新！",
       "failed_to_update": "無法更新標籤"
     }
+  },
+  "feeds": {
+    "all_feeds": "所有訂閱",
+    "manage_feeds": "管理訂閱"
   },
   "cleanups": {
     "cleanups": "清理",
@@ -1124,6 +1132,14 @@
     "no_bookmarks": {
       "title": "還沒有書籤",
       "description": "儲存有趣的的文章、連結和頁面，以便日後快速存取。"
+    },
+    "no_subscriptions": {
+      "title": "還沒有 RSS 訂閱",
+      "description": "訂閱 RSS 源，新文章會自動顯示在這裡。"
+    },
+    "no_feed_articles": {
+      "title": "還沒有來自訂閱源的文章",
+      "description": "訂閱的新文章在擷取後會顯示在這裡。"
     }
   },
   "view_options": {

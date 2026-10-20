@@ -790,6 +790,7 @@
     "experimental": "Eksperimentalno",
     "attachments": "Priponke",
     "home": "Dom",
+    "rss": "Viri",
     "something_went_wrong": "Nekaj je šlo narobe",
     "screenshot": "Posnetek zaslona",
     "roles": {
@@ -857,6 +858,8 @@
     "download_full_page_archive": "Prenesi arhiv",
     "refresh": "Osveži",
     "save": "Shrani",
+    "save_to_library": "Shrani v knjižnico",
+    "saved_to_library": "Shranjeno v knjižnico",
     "ignore": "Ignoriraj",
     "bulk_edit": "Množično urejanje",
     "change_layout": "Spremeni postavitev",
@@ -1058,6 +1061,7 @@
       "delete_from_list": "Ta zaznamek je bil izbrisan iz seznama",
       "clipboard_copied": "Povezava je bila kopirana v odložišče!",
       "updated": "Zaznamek je bil posodobljen!",
+      "saved_to_library": "Zaznamek je bil shranjen v vašo knjižnico!",
       "refetch": "Ponovno pridobivanje je bilo dodano v čakalno vrsto!",
       "full_page_archive": "Ustvarjanje arhiva celotne strani je bilo sproženo",
       "preserve_pdf": "Ohranjanje PDF je bilo sproženo",
@@ -1076,6 +1080,10 @@
       "updated": "Oznaka je bila posodobljena!",
       "failed_to_update": "Posodobitev oznake ni uspela"
     }
+  },
+  "feeds": {
+    "all_feeds": "Vsi viri",
+    "manage_feeds": "Upravljanje virov"
   },
   "dialogs": {
     "bookmarks": {
@@ -1114,6 +1122,14 @@
     "no_bookmarks": {
       "title": "Še ni zaznamkov",
       "description": "Shrani zanimive članke, povezave in strani za hiter dostop pozneje."
+    },
+    "no_subscriptions": {
+      "title": "Še ni RSS naročnin",
+      "description": "Naročite se na vire in njihovi novi članki se bodo tukaj samodejno prikazali."
+    },
+    "no_feed_articles": {
+      "title": "Še ni člankov iz vaših virov",
+      "description": "Novi članki iz vaših naročnin se bodo tukaj prikazali, ko bodo pridobljeni."
     }
   },
   "bookmark_editor": {

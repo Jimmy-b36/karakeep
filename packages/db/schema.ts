@@ -255,6 +255,12 @@ export const bookmarks = sqliteTable(
     modifiedAt: modifiedAtField(),
     title: text("title"),
     archived: integer("archived", { mode: "boolean" }).notNull().default(false),
+    // Whether the bookmark belongs to the user's main library (Home). RSS
+    // imports create unsaved bookmarks (inLibrary = false); explicit saves
+    // flip the flag without changing the RSS provenance.
+    inLibrary: integer("inLibrary", { mode: "boolean" })
+      .notNull()
+      .default(true),
     favourited: integer("favourited", { mode: "boolean" })
       .notNull()
       .default(false),

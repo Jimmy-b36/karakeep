@@ -24,6 +24,7 @@
     "screenshot": "Snímka obrazovky",
     "video": "Video",
     "home": "Domov",
+    "rss": "Odbery",
     "bookmark_types": {
       "title": "Typ záložky",
       "link": "Odkaz",
@@ -75,6 +76,8 @@
     "favorite": "Pridať medzi obľúbené",
     "unselect_all": "Zrušiť výber",
     "save": "Uložiť",
+    "save_to_library": "Uložiť do knižnice",
+    "saved_to_library": "Uložené v knižnici",
     "add_to_list": "Pridať do zoznamu",
     "add": "Pridať",
     "refresh": "Obnoviť",
@@ -1072,6 +1075,7 @@
     "bookmarks": {
       "clipboard_copied": "Odkaz bol pridaný do schránky!",
       "updated": "Záložka bola aktualizovaná!",
+      "saved_to_library": "Záložka bola uložená do vašej knižnice!",
       "delete_from_list": "Záložka bola odstránená zo zoznamu",
       "deleted": "Záložka bola zmazaná!",
       "refetch": "Opätovné načítanie bolo zaradené do frontu!",
@@ -1092,6 +1096,10 @@
       "updated": "Značka bola aktualizovaná!",
       "failed_to_update": "Značku sa nepodarilo aktualizovať"
     }
+  },
+  "feeds": {
+    "all_feeds": "Všetky odbery",
+    "manage_feeds": "Spravovať odbery"
   },
   "cleanups": {
     "cleanups": "Čistenie",
@@ -1114,6 +1122,14 @@
     "no_bookmarks": {
       "title": "Zatiaľ žiadne záložky",
       "description": "Ukladaj si zaujímavé články, odkazy a stránky, aby si sa k nim neskôr rýchlo dostal."
+    },
+    "no_subscriptions": {
+      "title": "Zatiaľ žiadne odbery RSS",
+      "description": "Prihláste sa na odbery a ich nové články sa tu zobrazia automaticky."
+    },
+    "no_feed_articles": {
+      "title": "Zatiaľ žiadne články z vašich odberov",
+      "description": "Nové články z vašich odberov sa tu zobrazia, keď budú stiahnuté."
     }
   },
   "bookmark_editor": {

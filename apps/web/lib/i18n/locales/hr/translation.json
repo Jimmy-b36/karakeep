@@ -210,6 +210,7 @@
     "video": "Video",
     "archive": "Arhiva",
     "home": "Početna",
+    "rss": "Feedovi",
     "tags": "Oznake",
     "type": "Upiši",
     "size": "Veličina",
@@ -765,6 +766,8 @@
     "bulk_edit": "Masovno uređivanje",
     "remove_from_list": "Ukloni s popisa",
     "save": "Spremi",
+    "save_to_library": "Spremi u knjižnicu",
+    "saved_to_library": "Spremljeno u knjižnici",
     "add": "Dodaj",
     "edit": "Uredi",
     "fetch_now": "Preuzmi odmah",
@@ -1014,6 +1017,7 @@
   "toasts": {
     "bookmarks": {
       "updated": "Oznaka je ažurirana!",
+      "saved_to_library": "Oznaka je spremljena u knjižnici!",
       "deleted": "Oznaka je izbrisana!",
       "refetch": "Ponovno preuzimanje je stavljeno u čekanje!",
       "full_page_archive": "Pokrenuto je stvaranje potpune arhive stranice",
@@ -1035,6 +1039,10 @@
       "updated": "Oznaka je ažurirana!",
       "failed_to_update": "Ažuriranje oznake nije uspjelo"
     }
+  },
+  "feeds": {
+    "all_feeds": "Svi feedovi",
+    "manage_feeds": "Upravljaj feedovima"
   },
   "cleanups": {
     "cleanups": "Čišćenje",
@@ -1114,6 +1122,14 @@
     "no_bookmarks": {
       "title": "Još nema oznaka",
       "description": "Spremi zanimljive članke, poveznice i stranice da im brzo pristupiš kasnije."
+    },
+    "no_subscriptions": {
+      "title": "Još nema RSS pretplata",
+      "description": "Pretplatite se na feedove i njihovi novi članci pojavit će se ovdje automatski."
+    },
+    "no_feed_articles": {
+      "title": "Još nema članaka iz vaših feedova",
+      "description": "Novi članci iz vaših pretplata pojaviti će se ovdje kada se dohvate."
     }
   },
   "bookmark_editor": {

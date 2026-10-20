@@ -12,6 +12,7 @@ import {
   lt,
   lte,
   or,
+  sql,
   SQL,
 } from "drizzle-orm";
 import invariant from "tiny-invariant";
@@ -29,6 +30,7 @@ import {
   bookmarkTags,
   bookmarkTexts,
   rssFeedImportsTable,
+  rssFeedsTable,
   tagsOnBookmarks,
 } from "@karakeep/db/schema";
 import {
@@ -111,6 +113,10 @@ export class BareBookmark {
 
   get userId() {
     return this.bareBookmark.userId;
+  }
+
+  get inLibrary() {
+    return this.bareBookmark.inLibrary;
   }
 
   static async bareFromId(ctx: AuthedContext, bookmarkId: string) {
@@ -409,6 +415,7 @@ export class Bookmark extends BareBookmark {
       id: bookmark.id,
       type: bookmark.type,
       source: bookmark.source,
+      inLibrary: bookmark.inLibrary,
       firstCreatedAt: bookmark.dbCreatedAt,
       createdAt: bookmark.createdAt,
       modifiedAt: bookmark.modifiedAt,
@@ -448,14 +455,18 @@ export class Bookmark extends BareBookmark {
 
     // Validate that only one of listId, tagId, or rssFeedId is specified
     // Combined filters are not supported as they would require different query strategies
-    const filterCount = [input.listId, input.tagId, input.rssFeedId].filter(
-      (f) => f !== undefined,
-    ).length;
+    const filterCount = [
+      input.listId,
+      input.tagId,
+      input.rssFeedId,
+      // rssOnly requires its own query strategy, so it can't be combined.
+      ...(input.rssOnly ? [true] : []),
+    ].filter((f) => f !== undefined).length;
     if (filterCount > 1) {
       throw new TRPCError({
         code: "BAD_REQUEST",
         message:
-          "Cannot filter by multiple of listId, tagId, and rssFeedId simultaneously",
+          "Cannot filter by multiple of listId, tagId, rssFeedId, and rssOnly simultaneously",
       });
     }
 
@@ -501,8 +512,22 @@ export class Bookmark extends BareBookmark {
       input.favourited !== undefined
         ? eq(bookmarks.favourited, input.favourited)
         : undefined,
+      input.inLibrary !== undefined
+        ? eq(bookmarks.inLibrary, input.inLibrary)
+        : undefined,
       input.ids ? inArray(bookmarks.id, input.ids) : undefined,
     ];
+
+    // RSS board: anything sourced from RSS, plus anything imported by one of
+    // the user's feeds (a feed can import an already-manually-saved bookmark
+    // whose source stays web/api/...). The correlated EXISTS keeps articles
+    // shared by multiple feeds from duplicating, and the source fallback
+    // keeps RSS-origin articles discoverable after unsubscribing.
+    const buildRssOnlyFilter = (): SQL =>
+      or(
+        eq(bookmarks.source, "rss"),
+        sql`EXISTS (SELECT 1 FROM ${rssFeedImportsTable} INNER JOIN ${rssFeedsTable} ON ${rssFeedsTable.id} = ${rssFeedImportsTable.rssFeedId} WHERE ${rssFeedImportsTable.bookmarkId} = ${bookmarks.id} AND ${rssFeedsTable.userId} = ${ctx.user.id})`,
+      ) as SQL;
 
     // Build ORDER BY clause
     const buildOrderBy = () =>
@@ -584,6 +609,7 @@ export class Bookmark extends BareBookmark {
           .where(
             and(
               eq(bookmarks.userId, ctx.user.id),
+              ...(input.rssOnly ? [buildRssOnlyFilter()] : []),
               ...buildCommonFilters(),
               buildCursorCondition(bookmarks.createdAt, bookmarks.id),
             ),

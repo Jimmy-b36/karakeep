@@ -20,6 +20,7 @@
     "screenshot": "Schermopname",
     "video": "Video",
     "home": "Home",
+    "rss": "Feeds",
     "password": "Wachtwoord",
     "action": "Actie",
     "key": "Sleutel",
@@ -75,6 +76,8 @@
     "favorite": "Favoriet",
     "copy_link": "Kopieër link",
     "save": "Bewaar",
+    "save_to_library": "Opslaan in bibliotheek",
+    "saved_to_library": "Opgeslagen in bibliotheek",
     "recrawl": "Opnieuw doorzoeken",
     "apply_all": "Alles Toepassen",
     "edit_title": "Wijzig Titel",
@@ -1080,6 +1083,7 @@
       "refetch": "Opnieuw ophalen is in de wachtrij geplaatst!",
       "full_page_archive": "Het aanmaken van een volledig pagina-archief is gestart",
       "updated": "De bladwijzer is bijgewerkt!",
+      "saved_to_library": "De bladwijzer is opgeslagen in je bibliotheek!",
       "deleted": "De bladwijzer is verwijderd!",
       "delete_from_list": "De bladwijzer is uit de lijst verwijderd",
       "clipboard_copied": "Link is naar je klembord gekopieerd!",
@@ -1099,6 +1103,10 @@
       "updated": "Tag is bijgewerkt!",
       "failed_to_update": "Bijwerken van tag mislukt"
     }
+  },
+  "feeds": {
+    "all_feeds": "Alle feeds",
+    "manage_feeds": "Feeds beheren"
   },
   "cleanups": {
     "cleanups": "Opschonen",
@@ -1124,6 +1132,14 @@
     "no_bookmarks": {
       "title": "Nog geen bladwijzers",
       "description": "Sla interessante artikelen, links en pagina's op om ze later snel te kunnen openen."
+    },
+    "no_subscriptions": {
+      "title": "Nog geen RSS-abonnementen",
+      "description": "Abonneer je op feeds en hun nieuwe artikelen verschijnen hier automatisch."
+    },
+    "no_feed_articles": {
+      "title": "Nog geen artikelen uit je feeds",
+      "description": "Nieuwe artikelen uit je abonnementen verschijnen hier zodra ze zijn opgehaald."
     }
   },
   "view_options": {

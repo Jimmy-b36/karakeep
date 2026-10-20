@@ -51,6 +51,7 @@ describe("compactBookmark", () => {
     embeddingStatus: "success" as const,
     note: null,
     summary: null,
+    inLibrary: true,
     userId: "user_1",
     tags: [],
     assets: [],

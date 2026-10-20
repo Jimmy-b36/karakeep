@@ -31,6 +31,7 @@
     "video": "Vídeo",
     "archive": "Arquivo",
     "home": "Home",
+    "rss": "Feeds",
     "type": "Tipo",
     "size": "Tamanho",
     "updated_at": "Atualizado em",
@@ -65,6 +66,8 @@
     "bulk_edit": "Edição em Massa",
     "remove_from_list": "Remover da Lista",
     "save": "Salvar",
+    "save_to_library": "Salvar na biblioteca",
+    "saved_to_library": "Salvo na biblioteca",
     "add": "Adicionar",
     "edit": "Editar",
     "create": "Criar",
@@ -1082,6 +1085,7 @@
     "bookmarks": {
       "deleted": "O favorito foi excluído!",
       "updated": "O favorito foi atualizado!",
+      "saved_to_library": "O marcador foi salvo na sua biblioteca!",
       "refetch": "A nova busca foi enfileirada!",
       "full_page_archive": "A criação do arquivo de página inteira foi acionada",
       "delete_from_list": "O favorito foi excluído da lista",
@@ -1103,6 +1107,10 @@
       "failed_to_update": "Falha ao atualizar etiqueta"
     }
   },
+  "feeds": {
+    "all_feeds": "Todos os feeds",
+    "manage_feeds": "Gerenciar feeds"
+  },
   "cleanups": {
     "cleanups": "Limpezas",
     "duplicate_tags": {
@@ -1114,6 +1122,14 @@
     "no_bookmarks": {
       "title": "Ainda não há marcadores",
       "description": "Salve artigos, links e páginas interessantes para acessá-los rapidamente mais tarde."
+    },
+    "no_subscriptions": {
+      "title": "Ainda não há assinaturas RSS",
+      "description": "Assine feeds e seus novos artigos aparecerão aqui automaticamente."
+    },
+    "no_feed_articles": {
+      "title": "Ainda não há artigos dos seus feeds",
+      "description": "Os novos artigos das suas assinaturas aparecerão aqui quando forem buscados."
     }
   },
   "bookmark_editor": {

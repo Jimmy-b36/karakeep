@@ -19,6 +19,7 @@
     "video": "Vídeo",
     "archive": "Archivo",
     "home": "Inicio",
+    "rss": "Fuentes",
     "password": "Contraseña",
     "key": "Clave",
     "experimental": "Experimental",
@@ -568,6 +569,8 @@
     "edit_tags": "Editar etiquetas",
     "remove_from_list": "Eliminar de la lista",
     "save": "Guardar",
+    "save_to_library": "Guardar en la biblioteca",
+    "saved_to_library": "Guardado en la biblioteca",
     "add": "Añadir",
     "edit": "Editar",
     "create": "Crear",
@@ -1011,6 +1014,7 @@
   "toasts": {
     "bookmarks": {
       "updated": "¡El marcador se ha actualizado!",
+      "saved_to_library": "¡El marcador se ha guardado en tu biblioteca!",
       "refetch": "¡Se ha solicitado la actualización!",
       "deleted": "¡El marcador se ha eliminado!",
       "full_page_archive": "Se ha pedido un Archivo de Página Completa",
@@ -1032,6 +1036,10 @@
       "updated": "¡La etiqueta ha sido actualizada!",
       "failed_to_update": "Error al actualizar la etiqueta"
     }
+  },
+  "feeds": {
+    "all_feeds": "Todas las fuentes",
+    "manage_feeds": "Gestionar fuentes"
   },
   "cleanups": {
     "cleanups": "Limpiezas",
@@ -1124,6 +1132,14 @@
     "no_bookmarks": {
       "title": "Aún no hay marcadores",
       "description": "Guarda artículos, enlaces y páginas interesantes para acceder a ellos rápidamente más tarde."
+    },
+    "no_subscriptions": {
+      "title": "Aún no hay subscripciones RSS",
+      "description": "Suscríbete a las fuentes y sus nuevos artículos aparecerán aquí automáticamente."
+    },
+    "no_feed_articles": {
+      "title": "Aún no hay artículos de tus fuentes",
+      "description": "Los nuevos artículos de tus subscripciones aparecerán aquí cuando se obtengan."
     }
   },
   "view_options": {

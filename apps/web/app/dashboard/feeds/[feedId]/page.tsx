@@ -1,5 +1,7 @@
 import { notFound } from "next/navigation";
 import Bookmarks from "@/components/dashboard/bookmarks/Bookmarks";
+import FeedsEmptyState from "@/components/dashboard/feeds/FeedsEmptyState";
+import FeedsHeader from "@/components/dashboard/feeds/FeedsHeader";
 import { api } from "@/server/api/client";
 import { TRPCError } from "@trpc/server";
 
@@ -24,7 +26,8 @@ export default async function FeedPage(props: {
       query={{ rssFeedId: feed.id }}
       showDivider={true}
       showEditorCard={false}
-      header={<div className="text-2xl">{feed.name}</div>}
+      header={<FeedsHeader currentFeedId={feed.id} />}
+      emptyState={<FeedsEmptyState hasSubscriptions={true} />}
     />
   );
 }

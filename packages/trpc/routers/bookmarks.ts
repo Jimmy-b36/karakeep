@@ -291,6 +291,9 @@ export const bookmarksAppRouter = router({
           const resaved = {
             createdAt: input.createdAt ?? now,
             archived: input.archived ?? false,
+            // A manual re-save of an existing (e.g. RSS-imported) bookmark
+            // promotes it into the library.
+            inLibrary: true,
             ...(input.title !== undefined ? { title: input.title } : {}),
             ...(input.favourited !== undefined
               ? { favourited: input.favourited }
@@ -372,6 +375,9 @@ export const bookmarksAppRouter = router({
               summary: input.summary,
               createdAt: input.createdAt,
               source: input.source,
+              // RSS imports stay off Home until explicitly saved; everything
+              // else (web/api/import/...) is a library bookmark.
+              inLibrary: input.source === "rss" ? false : true,
               // Only links currently support summarization. Let's set the status to null for other types for now.
               summarizationStatus:
                 input.type === BookmarkTypes.LINK ? "pending" : null,
@@ -952,6 +958,47 @@ export const bookmarksAppRouter = router({
         readingProgressAnchor: progress?.readingProgressAnchor ?? null,
         readingProgressPercent: progress?.readingProgressPercent ?? null,
       };
+    }),
+  saveToLibrary: bookmarksProcedure
+    .input(z.object({ bookmarkId: z.string() }))
+    .output(
+      z.object({
+        id: z.string(),
+        inLibrary: z.boolean(),
+      }),
+    )
+    .use(ensureBookmarkOwnership)
+    .mutation(async ({ ctx }) => {
+      const bookmark = ctx.bookmark;
+      // Idempotent: an already-saved bookmark is a no-op, timestamps included.
+      if (!bookmark.inLibrary) {
+        const now = new Date();
+        // Match manual re-saving: unarchive and bump to the top of Home.
+        await ctx.db
+          .update(bookmarks)
+          .set({
+            inLibrary: true,
+            createdAt: now,
+            archived: false,
+            modifiedAt: now,
+          })
+          .where(
+            and(
+              eq(bookmarks.userId, ctx.user.id),
+              eq(bookmarks.id, bookmark.id),
+            ),
+          );
+        await Promise.all([
+          triggerSearchReindex(bookmark.id, { groupId: ctx.user.id }),
+          new WebhooksService(ctx.db).triggerWebhook(
+            bookmark.id,
+            "edited",
+            ctx.user.id,
+            { groupId: ctx.user.id },
+          ),
+        ]);
+      }
+      return { id: bookmark.id, inLibrary: true };
     }),
   getBookmark: bookmarksProcedure
     .use(createBookmarksQueriedMiddleware())

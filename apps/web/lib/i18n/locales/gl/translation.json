@@ -24,6 +24,7 @@
     "screenshot": "Captura de pantalla",
     "video": "Vídeo",
     "home": "Inicio",
+    "rss": "Fontes",
     "source": "Fonte",
     "bookmark_types": {
       "text": "Texto",
@@ -59,6 +60,8 @@
     "download_full_page_archive": "Descargar Arquivo da Páxina Completa",
     "add_to_list": "Agregar á lista",
     "save": "Gardar",
+    "save_to_library": "Gardar na biblioteca",
+    "saved_to_library": "Gardado na biblioteca",
     "add": "Engadir",
     "edit": "Editar",
     "create": "Crear",
@@ -134,6 +137,7 @@
   "toasts": {
     "bookmarks": {
       "updated": "O marcador actualizouse!",
+      "saved_to_library": "O marcador gardouse na biblioteca!",
       "deleted": "O marcador eliminouse!",
       "refetch": "Solicitouse a actualización!",
       "full_page_archive": "Pediuse un Arquivo de Páxina Completa",
@@ -155,6 +159,10 @@
       "updated": "A etiqueta actualizouse correctamente!",
       "failed_to_update": "Produciuse un erro ao actualizar a etiqueta"
     }
+  },
+  "feeds": {
+    "all_feeds": "Todas as fontes",
+    "manage_feeds": "Xestionar fontes"
   },
   "cleanups": {
     "cleanups": "Limpezas",
@@ -1114,6 +1122,14 @@
     "no_bookmarks": {
       "title": "Aínda non hai marcadores",
       "description": "Garda artigos, ligazóns e páxinas interesantes para acceder a eles rapidamente máis tarde."
+    },
+    "no_subscriptions": {
+      "title": "Aínda non hai subscricións RSS",
+      "description": "Se te subscribes ás fontes, os seus novos artigos aparecerán aquí automaticamente."
+    },
+    "no_feed_articles": {
+      "title": "Aínda non hai artigos das túas fontes",
+      "description": "Os novos artigos das túas subscricións aparecerán aquí cando se descarguen."
     }
   },
   "bookmark_editor": {

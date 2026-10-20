@@ -28,6 +28,7 @@
     "role": "Role",
     "archive": "Archivovat",
     "home": "Domů",
+    "rss": "Odběry",
     "title": "Název",
     "description": "Popis",
     "summary": "Shrnutí",
@@ -76,6 +77,8 @@
     "manage_lists": "Spravovat seznamy",
     "remove_from_list": "Odebrat ze seznamu",
     "save": "Uložit",
+    "save_to_library": "Uložit do knihovny",
+    "saved_to_library": "Uloženo v knihovně",
     "add": "Přidat",
     "edit": "Upravit",
     "open_editor": "Otevřít editor",
@@ -862,6 +865,7 @@
   "toasts": {
     "bookmarks": {
       "updated": "Záložka byla aktualizována!",
+      "saved_to_library": "Záložka byla uložena do vaší knihovny!",
       "deleted": "Záložka byla smazána!",
       "refetch": "Opětovné načtení bylo zařazeno do fronty!",
       "full_page_archive": "Vytváření archivu celé stránky bylo spuštěno",
@@ -883,6 +887,10 @@
       "updated": "Štítek byl aktualizován!",
       "failed_to_update": "Nepodařilo se aktualizovat štítek"
     }
+  },
+  "feeds": {
+    "all_feeds": "Všechny odběry",
+    "manage_feeds": "Spravovat odběry"
   },
   "admin": {
     "server_stats": {
@@ -1117,6 +1125,14 @@
     "no_bookmarks": {
       "title": "Zatím žádné záložky",
       "description": "Ukládej si zajímavé články, odkazy a stránky, abys k nim měl později rychlý přístup."
+    },
+    "no_subscriptions": {
+      "title": "Zatím žádné odběry RSS",
+      "description": "Odebírejte odběry a jejich nové články se zde zobrazí automaticky."
+    },
+    "no_feed_articles": {
+      "title": "Zatím žádné články z vašich odběrů",
+      "description": "Nové články z vašich odběrů se zde zobrazí, jakmile budou staženy."
     }
   },
   "cleanups": {

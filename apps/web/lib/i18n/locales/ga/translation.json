@@ -28,6 +28,7 @@
     "video": "Físeán",
     "archive": "Cartlann",
     "home": "Baile",
+    "rss": "Fothaí",
     "title": "Teideal",
     "description": "Cur Síos",
     "summary": "Achoimre",
@@ -68,6 +69,8 @@
     "manage_lists": "Bainistigh Liostaí",
     "remove_from_list": "Bain ón Liosta",
     "save": "Sábháil",
+    "save_to_library": "Sábháil sa Leabharlann",
+    "saved_to_library": "Sábháilte sa Leabharlann",
     "add": "Cuir leis",
     "edit": "Cuir in Eagar",
     "open_editor": "Oscail an tEagarthóir",
@@ -862,6 +865,7 @@
   "toasts": {
     "bookmarks": {
       "updated": "Tá an leabharmharc nuashonraithe!",
+      "saved_to_library": "Tá an leabharmharc sábháilte i do leabharlann!",
       "deleted": "Scriosadh an leabharmharc!",
       "refetch": "Cuireadh atógáil sa scuaine!",
       "full_page_archive": "Tá cruthú Cartlainne Leathanach Iomlán tosaithe",
@@ -883,6 +887,10 @@
       "updated": "Nuashonraíodh an chlib!",
       "failed_to_update": "Theip ar nuashonrú na clibe"
     }
+  },
+  "feeds": {
+    "all_feeds": "Gach fotha",
+    "manage_feeds": "Bainistigh fothaí"
   },
   "admin": {
     "server_stats": {
@@ -1117,6 +1125,14 @@
     "no_bookmarks": {
       "title": "Níl aon leabharmharcanna ann go fóill",
       "description": "Sábháil ailt, naisc agus leathanaigh spéisiúla chun rochtain a fháil orthu go tapa níos déanaí."
+    },
+    "no_subscriptions": {
+      "title": "Níl aon síntiúis RSS ann go fóill",
+      "description": "Déan síntiús le fothaí agus taispeánfar a n-alt nua anseo go huathoibríoch."
+    },
+    "no_feed_articles": {
+      "title": "Níl aon alt ó do fhothaí ann go fóill",
+      "description": "Taispeánfar alt nua ó do chuid síntiúis anseo nuair a ghabhtar iad."
     }
   },
   "cleanups": {

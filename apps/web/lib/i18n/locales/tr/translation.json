@@ -25,6 +25,7 @@
     "video": "Video",
     "archive": "Arşiv",
     "home": "Ana Sayfa",
+    "rss": "Akışlar",
     "size": "Boyut",
     "bookmark_types": {
       "text": "Metin",
@@ -72,6 +73,8 @@
     "manage_lists": "Listeleri Yönet",
     "remove_from_list": "Listeden Kaldır",
     "save": "Kaydet",
+    "save_to_library": "Kitaplığa kaydet",
+    "saved_to_library": "Kitaplığa kaydedildi",
     "add": "Ekle",
     "edit": "Düzenle",
     "create": "Oluştur",
@@ -1018,6 +1021,7 @@
   "toasts": {
     "bookmarks": {
       "updated": "Yer işareti güncellendi!",
+      "saved_to_library": "Yer işareti kitaplığa kaydedildi!",
       "deleted": "Yer işareti silindi!",
       "refetch": "Yeniden getir kuyruğa alındı!",
       "full_page_archive": "Tüm Sayfa Arşivi oluşturma başlatıldı",
@@ -1039,6 +1043,10 @@
       "updated": "Etiket güncellendi!",
       "failed_to_update": "Etiket güncellenemedi"
     }
+  },
+  "feeds": {
+    "all_feeds": "Tüm akışlar",
+    "manage_feeds": "Akışları yönet"
   },
   "cleanups": {
     "cleanups": "Temizleme",
@@ -1118,6 +1126,14 @@
     "no_bookmarks": {
       "title": "Henüz yer işareti yok",
       "description": "İlgini çeken makaleleri, bağlantıları ve sayfaları kaydet ve daha sonra hızlıca eriş."
+    },
+    "no_subscriptions": {
+      "title": "Henüz RSS aboneliği yok",
+      "description": "Akışlara abone olun; yeni makaleler burada otomatik olarak görünecek."
+    },
+    "no_feed_articles": {
+      "title": "Akışlarınızdan henüz makale yok",
+      "description": "Aboneliklerinizin yeni makaleleri alındığında burada görünecek."
     }
   },
   "bookmark_editor": {

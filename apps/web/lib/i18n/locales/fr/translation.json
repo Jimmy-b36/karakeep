@@ -23,6 +23,7 @@
     "video": "Vidéo",
     "archive": "Archive",
     "home": "Accueil",
+    "rss": "Flux",
     "source": "Source",
     "bookmark_types": {
       "link": "Lien",
@@ -70,6 +71,8 @@
     "manage_lists": "Gérer les listes",
     "remove_from_list": "Retirer de la liste",
     "save": "Enregistrer",
+    "save_to_library": "Enregistrer dans la bibliothèque",
+    "saved_to_library": "Enregistré dans la bibliothèque",
     "add": "Ajouter",
     "edit": "Modifier",
     "create": "Créer",
@@ -1011,6 +1014,7 @@
   "toasts": {
     "bookmarks": {
       "updated": "Le favori a été mis à jour !",
+      "saved_to_library": "Le favori a été enregistré dans votre bibliothèque !",
       "deleted": "Le favori a été supprimé !",
       "refetch": "Re-fetch a été mis en file d'attente !",
       "full_page_archive": "La création de l'archive de la page complète a été déclenchée",
@@ -1032,6 +1036,10 @@
       "updated": "Le tag a été mis à jour !",
       "failed_to_update": "Impossible de mettre à jour le tag"
     }
+  },
+  "feeds": {
+    "all_feeds": "Tous les flux",
+    "manage_feeds": "Gérer les flux"
   },
   "cleanups": {
     "cleanups": "Nettoyages",
@@ -1114,6 +1122,14 @@
     "no_bookmarks": {
       "title": "Pas encore de marque-pages",
       "description": "Enregistrez des articles, des liens et des pages intéressants pour y accéder rapidement plus tard."
+    },
+    "no_subscriptions": {
+      "title": "Pas encore d'abonnements RSS",
+      "description": "Abonnez-vous à des flux et leurs nouveaux articles apparaîtront ici automatiquement."
+    },
+    "no_feed_articles": {
+      "title": "Pas encore d'articles de vos flux",
+      "description": "Les nouveaux articles de vos abonnements apparaîtront ici lorsqu'ils seront récupérés."
     }
   },
   "bookmark_editor": {

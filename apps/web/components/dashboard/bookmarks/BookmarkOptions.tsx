@@ -19,6 +19,7 @@ import useUpload from "@/lib/hooks/upload-file";
 import { useTranslation } from "@/lib/i18n/client";
 import {
   HardDriveDownload,
+  BookPlus,
   Circle,
   Download,
   FileDown,
@@ -50,6 +51,7 @@ import { useBookmarkListContext } from "@karakeep/shared-react/hooks/bookmark-li
 import {
   usePreserveBookmarkVideo,
   useRecrawlBookmark,
+  useSaveBookmarkToLibrary,
   useUpdateBookmark,
 } from "@karakeep/shared-react/hooks/bookmarks";
 import { useRemoveBookmarkFromList } from "@karakeep/shared-react/hooks/lists";
@@ -231,6 +233,13 @@ export default function BookmarkOptions({
     onError,
   });
 
+  const saveToLibraryMutator = useSaveBookmarkToLibrary({
+    onSuccess: () => {
+      toast.success(t("toasts.bookmarks.saved_to_library"));
+    },
+    onError,
+  });
+
   const handleBannerFileChange = (event: ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
     if (files && files.length > 0) {
@@ -316,6 +325,16 @@ export default function BookmarkOptions({
             bookmarkId: linkId,
             favourited: !bookmark.favourited,
           }),
+      },
+      {
+        id: "save-to-library",
+        title: bookmark.inLibrary
+          ? t("actions.saved_to_library")
+          : t("actions.save_to_library"),
+        icon: <BookPlus className="size-4" />,
+        visible: isOwner,
+        disabled: demoMode || bookmark.inLibrary,
+        onClick: () => saveToLibraryMutator.mutate({ bookmarkId: bookmark.id }),
       },
       {
         id: "archive",
