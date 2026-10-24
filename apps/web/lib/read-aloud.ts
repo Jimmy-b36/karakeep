@@ -288,6 +288,8 @@ export type ReadAloudStatus =
 
 export interface ReadAloudSnapshot {
   status: ReadAloudStatus;
+  canPrevious: boolean;
+  canNext: boolean;
   error: ReadAloudErrorInfo | null;
   currentText: string | null;
   currentWord?: SpeechWord | null;
@@ -339,6 +341,8 @@ export class ReadAloudPlayer {
   private objectUrl: string | null = null;
   private version: string | null = null;
   private currentStart = 0;
+  private previousStarts: number[] = [];
+  private paused = false;
   private nextOffset: number | null = 0;
   private sessionActive = false;
   private currentText: string | null = null;
@@ -347,6 +351,8 @@ export class ReadAloudPlayer {
   private currentWord: SpeechWord | null = null;
   private snapshot: ReadAloudSnapshot = {
     status: "idle",
+    canPrevious: false,
+    canNext: false,
     error: null,
     currentText: null,
   };
@@ -396,10 +402,36 @@ export class ReadAloudPlayer {
     void this.playNext(this.session);
   }
 
+  previousChunk(): void {
+    if (!this.snapshot.canPrevious) return;
+    this.navigateTo(this.previousStarts.pop()!);
+  }
+
+  nextChunk(): void {
+    if (!this.snapshot.canNext || this.nextOffset === null) return;
+    this.previousStarts.push(this.currentStart);
+    this.navigateTo(this.nextOffset);
+  }
+
+  private navigateTo(start: number): void {
+    this.session++;
+    if (this.prefetched?.start !== start) {
+      this.controller?.abort();
+      this.controller = null;
+      this.prefetched = null;
+    }
+    this.currentText = null;
+    this.clearAudio();
+    this.currentStart = start;
+    this.nextOffset = null;
+    void this.playNext(this.session);
+  }
+
   pause(): void {
     if (!this.sessionActive) {
       return;
     }
+    this.paused = true;
     this.audio.pause();
     this.emit({ status: "paused", error: null });
   }
@@ -409,7 +441,12 @@ export class ReadAloudPlayer {
       this.start();
       return;
     }
-    void this.playCurrentAudio();
+    this.paused = false;
+    if (this.objectUrl) {
+      void this.playCurrentAudio();
+    } else {
+      this.emit({ status: "buffering", error: null });
+    }
   }
 
   retry(): void {
@@ -461,6 +498,8 @@ export class ReadAloudPlayer {
     this.sessionActive = false;
     this.version = null;
     this.currentStart = 0;
+    this.previousStarts = [];
+    this.paused = false;
     this.nextOffset = 0;
     this.currentText = null;
     this.clearAudio();
@@ -481,12 +520,19 @@ export class ReadAloudPlayer {
     this.audio.load();
   }
 
-  private emit(snapshot: Omit<ReadAloudSnapshot, "currentText">): void {
+  private emit(snapshot: Pick<ReadAloudSnapshot, "status" | "error">): void {
     if (this.disposed) {
       return;
     }
+    const navigable =
+      this.sessionActive &&
+      this.objectUrl !== null &&
+      !snapshot.error &&
+      (snapshot.status === "playing" || snapshot.status === "paused");
     this.snapshot = {
       ...snapshot,
+      canPrevious: navigable && this.previousStarts.length > 0,
+      canNext: navigable && this.nextOffset !== null,
       currentText: this.currentText,
       currentWord: this.words.length ? this.currentWord : undefined,
     };
@@ -525,6 +571,12 @@ export class ReadAloudPlayer {
         this.fail(RESTART_ERROR);
         return;
       }
+      const rangeStart = /^(\d+)-\d+\/\d+$/.exec(chunk.range)?.[1];
+      if (this.version === null && rangeStart !== undefined) {
+        const offset = Number(rangeStart);
+        if (Number.isSafeInteger(offset) && offset >= start)
+          this.currentStart = offset;
+      }
       this.version = chunk.contentVersion;
       this.nextOffset = chunk.next;
 
@@ -536,6 +588,11 @@ export class ReadAloudPlayer {
       this.loadedText = chunk.text ?? null;
       this.words = chunk.words ?? [];
       this.currentWord = null;
+      if (this.paused) {
+        this.currentText = this.loadedText;
+        this.emit({ status: "paused", error: null });
+        return;
+      }
 
       try {
         await this.audio.play();
@@ -552,8 +609,9 @@ export class ReadAloudPlayer {
       if (token !== this.session) {
         return;
       }
+      if (this.paused) this.audio.pause();
       this.currentText = this.loadedText;
-      this.emit({ status: "playing", error: null });
+      this.emit({ status: this.paused ? "paused" : "playing", error: null });
       this.updateProgress();
       this.prefetchNext();
     } catch (error) {
@@ -627,17 +685,14 @@ export class ReadAloudPlayer {
     if (token !== this.session) {
       return;
     }
-    const next = this.nextOffset;
-    this.clearAudio();
-    if (next === null) {
+    if (this.nextOffset === null) {
+      this.clearAudio();
       this.sessionActive = false;
       this.currentText = null;
       this.emit({ status: "idle", error: null });
       return;
     }
-    this.currentText = null;
-    this.currentStart = next;
-    void this.playNext(token);
+    this.nextChunk();
   }
 
   private handleAudioError(token: number): void {
@@ -664,8 +719,9 @@ export class ReadAloudPlayer {
     if (token !== this.session) {
       return;
     }
+    if (this.paused) this.audio.pause();
     this.currentText = this.loadedText;
-    this.emit({ status: "playing", error: null });
+    this.emit({ status: this.paused ? "paused" : "playing", error: null });
     this.updateProgress();
     this.prefetchNext();
   }

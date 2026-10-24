@@ -1055,6 +1055,8 @@
       "play": "Play",
       "pause": "Pause",
       "resume": "Resume",
+      "previous_chunk": "Previous chunk",
+      "next_chunk": "Next chunk",
       "try_again": "Try again",
       "stop": "Stop",
       "restart": "Restart",

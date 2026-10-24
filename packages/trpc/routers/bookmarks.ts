@@ -20,6 +20,7 @@ import {
   AssetPreprocessingQueue,
   buildCrawlIdempotencyKey,
   EmbeddingsQueue,
+  enqueueSpeechPreparation,
   LinkCrawlerQueue,
   logEvent,
   LowPriorityCrawlerQueue,
@@ -311,6 +312,9 @@ export const bookmarksAppRouter = router({
               ),
             );
           await Promise.all([
+            enqueueSpeechPreparation(alreadyExists.id, {
+              groupId: ctx.user.id,
+            }),
             triggerSearchReindex(alreadyExists.id, {
               groupId: ctx.user.id,
             }),
@@ -989,6 +993,7 @@ export const bookmarksAppRouter = router({
             ),
           );
         await Promise.all([
+          enqueueSpeechPreparation(bookmark.id, { groupId: ctx.user.id }),
           triggerSearchReindex(bookmark.id, { groupId: ctx.user.id }),
           new WebhooksService(ctx.db).triggerWebhook(
             bookmark.id,
@@ -1282,7 +1287,12 @@ export const bookmarksAppRouter = router({
     .query(async ({ input, ctx }) => {
       // Normalize and compare URLs (ignoring hash fragment and trailing slash)
       function normalizeUrl(url: string): string {
-        const u = new URL(url);
+        let u: URL;
+        try {
+          u = new URL(url);
+        } catch {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Invalid URL" });
+        }
         u.hash = "";
         let pathname = u.pathname;
         if (pathname.endsWith("/") && pathname !== "/") {

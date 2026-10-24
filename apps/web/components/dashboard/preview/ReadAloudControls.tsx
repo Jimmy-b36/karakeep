@@ -7,6 +7,8 @@ import {
   Pause,
   Play,
   RotateCcw,
+  SkipBack,
+  SkipForward,
   Square,
 } from "lucide-react";
 
@@ -238,6 +240,28 @@ export default function ReadAloudControls({
             </Button>
           </div>
         )}
+        <div className="flex items-center gap-2">
+          <Button
+            onClick={readAloud.previousChunk}
+            variant="outline"
+            size="sm"
+            className="flex-1"
+            disabled={!snapshot.canPrevious}
+          >
+            <SkipBack className="size-4" aria-hidden="true" />
+            {t("preview.listen.previous_chunk")}
+          </Button>
+          <Button
+            onClick={readAloud.nextChunk}
+            variant="outline"
+            size="sm"
+            className="flex-1"
+            disabled={!snapshot.canNext}
+          >
+            <SkipForward className="size-4" aria-hidden="true" />
+            {t("preview.listen.next_chunk")}
+          </Button>
+        </div>
       </PopoverContent>
     </Popover>
   );

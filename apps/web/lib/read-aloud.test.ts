@@ -72,6 +72,185 @@ function setupPlayer() {
 }
 
 describe("ReadAloudPlayer", () => {
+  it("skips forward using the existing prefetch and disables navigation at boundaries", async () => {
+    const { player, fetchChunk, play } = setupPlayer();
+    const pending = deferred<SpeechChunk>();
+    fetchChunk
+      .mockResolvedValueOnce(chunk(100, "v1"))
+      .mockReturnValueOnce(pending.promise);
+    expect(player.currentSnapshot).toMatchObject({
+      canPrevious: false,
+      canNext: false,
+    });
+    player.previousChunk();
+    player.nextChunk();
+    expect(fetchChunk).not.toHaveBeenCalled();
+    player.start();
+    await flush();
+    expect(player.currentSnapshot).toMatchObject({
+      canPrevious: false,
+      canNext: true,
+    });
+    player.previousChunk();
+    player.nextChunk();
+    expect(player.currentSnapshot).toMatchObject({
+      status: "buffering",
+      canPrevious: false,
+      canNext: false,
+    });
+    player.nextChunk();
+    pending.resolve(chunk(null, "v1"));
+    await flush();
+    expect(fetchChunk).toHaveBeenCalledTimes(2);
+    expect(play).toHaveBeenCalledTimes(2);
+    expect(player.currentSnapshot).toMatchObject({
+      canPrevious: true,
+      canNext: false,
+    });
+    player.nextChunk();
+    expect(fetchChunk).toHaveBeenCalledTimes(2);
+    player.stop();
+    expect(player.currentSnapshot).toMatchObject({
+      canPrevious: false,
+      canNext: false,
+    });
+  });
+
+  it("goes back after automatic advancement and ignores stale audio and prefetch results", async () => {
+    const { player, audio, fetchChunk, play, revokeObjectURL } = setupPlayer();
+    const stale = deferred<SpeechChunk>();
+    fetchChunk
+      .mockResolvedValueOnce(chunk(100, "v1"))
+      .mockResolvedValueOnce(chunk(200, "v1"))
+      .mockReturnValueOnce(stale.promise)
+      .mockResolvedValueOnce(chunk(100, "v1"))
+      .mockResolvedValueOnce(chunk(200, "v1"));
+    player.start();
+    await flush();
+    audio.onended!(new Event("ended"));
+    await flush();
+    const oldEnded = audio.onended;
+    const signal = fetchChunk.mock.calls[2]![0].signal as AbortSignal;
+    player.previousChunk();
+    await flush();
+    expect(signal.aborted).toBe(true);
+    expect(fetchChunk.mock.calls[3]![0]).toMatchObject({
+      start: 0,
+      contentVersion: "v1",
+    });
+    expect(player.currentSnapshot.canPrevious).toBe(false);
+    expect(revokeObjectURL).toHaveBeenCalledWith("blob:2");
+    oldEnded!(new Event("ended"));
+    stale.resolve(chunk(null, "v1"));
+    await flush();
+    expect(play).toHaveBeenCalledTimes(3);
+    expect(fetchChunk.mock.calls.map(([request]) => request.start)).toEqual([
+      0, 100, 200, 0, 100,
+    ]);
+    player.stop();
+  });
+
+  it("keeps chunk navigation paused and resumes without fetching the target twice", async () => {
+    const { player, fetchChunk, play } = setupPlayer();
+    const next = deferred<SpeechChunk>();
+    fetchChunk
+      .mockResolvedValueOnce(chunk(100, "v1", "0-100/200", "First"))
+      .mockReturnValueOnce(next.promise)
+      .mockResolvedValueOnce(chunk(100, "v1", "0-100/200", "First"));
+    player.start();
+    await flush();
+    player.pause();
+    player.nextChunk();
+    next.resolve(chunk(null, "v1", "100-200/200", "Second"));
+    await flush();
+    expect(player.currentSnapshot).toMatchObject({
+      status: "paused",
+      currentText: "Second",
+    });
+    expect(play).toHaveBeenCalledTimes(1);
+    player.previousChunk();
+    await flush();
+    expect(player.currentSnapshot).toMatchObject({
+      status: "paused",
+      currentText: "First",
+    });
+    expect(play).toHaveBeenCalledTimes(1);
+    player.resume();
+    await flush();
+    expect(player.currentSnapshot.status).toBe("playing");
+    expect(play).toHaveBeenCalledTimes(2);
+    player.stop();
+  });
+
+  it("can resume while a paused navigation request is still buffering", async () => {
+    const { player, fetchChunk, play } = setupPlayer();
+    const next = deferred<SpeechChunk>();
+    fetchChunk
+      .mockResolvedValueOnce(chunk(100, "v1"))
+      .mockReturnValueOnce(next.promise);
+    player.start();
+    await flush();
+    player.pause();
+    player.nextChunk();
+    player.resume();
+    expect(play).toHaveBeenCalledTimes(1);
+    next.resolve(chunk(null, "v1"));
+    await flush();
+    expect(player.currentSnapshot.status).toBe("playing");
+    expect(play).toHaveBeenCalledTimes(2);
+    player.stop();
+  });
+
+  it("preserves content-version checks when navigating backwards", async () => {
+    const { player, fetchChunk } = setupPlayer();
+    fetchChunk
+      .mockResolvedValueOnce(chunk(100, "v1"))
+      .mockResolvedValueOnce(chunk(null, "v1"))
+      .mockResolvedValueOnce(chunk(100, "changed"));
+    player.start();
+    await flush();
+    player.nextChunk();
+    await flush();
+    player.previousChunk();
+    await flush();
+    expect(fetchChunk.mock.calls[2]![0]).toMatchObject({
+      start: 0,
+      contentVersion: "v1",
+    });
+    expect(player.currentSnapshot.error?.code).toBe("restart");
+    expect(player.currentSnapshot).toMatchObject({
+      canPrevious: false,
+      canNext: false,
+    });
+    player.stop();
+  });
+
+  it("remembers the server-snapped start and resets history on a new jump", async () => {
+    const { player, fetchChunk } = setupPlayer();
+    fetchChunk.mockImplementation(async ({ start }) =>
+      start === 100
+        ? chunk(null, "v1", "100-200/200")
+        : chunk(100, "v1", "45-100/200"),
+    );
+    player.startAt(42);
+    await flush();
+    player.nextChunk();
+    await flush();
+    player.previousChunk();
+    await flush();
+    expect(fetchChunk.mock.calls[2]![0]).toMatchObject({
+      start: 45,
+      contentVersion: "v1",
+    });
+    player.startAt(100);
+    await flush();
+    expect(player.currentSnapshot).toMatchObject({
+      canPrevious: false,
+      canNext: false,
+    });
+    player.stop();
+  });
+
   it("jumps, cancels the old session and continues from the server offset", async () => {
     const { player, audio, fetchChunk, revokeObjectURL } = setupPlayer();
     fetchChunk.mockResolvedValueOnce(chunk(10, "old"));

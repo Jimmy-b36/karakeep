@@ -73,6 +73,64 @@ describe("useReadAloud voice selection", () => {
     vi.unstubAllGlobals();
   });
 
+  it("exposes chunk navigation and clears its state when switching bookmarks", async () => {
+    mocks.fetchSpeechChunk
+      .mockResolvedValueOnce({
+        blob: new Blob(["audio"]),
+        next: 100,
+        contentVersion: "v1",
+        range: "0-100/200",
+        text: "First",
+      })
+      .mockResolvedValueOnce({
+        blob: new Blob(["audio"]),
+        next: null,
+        contentVersion: "v1",
+        range: "100-200/200",
+        text: "Second",
+      })
+      .mockResolvedValueOnce({
+        blob: new Blob(["audio"]),
+        next: 100,
+        contentVersion: "v1",
+        range: "0-100/200",
+        text: "First",
+      });
+    const { result, rerender } = renderHook(
+      ({ bookmarkId }) => useReadAloud(bookmarkId, true),
+      { initialProps: { bookmarkId: "bookmark-1" } },
+    );
+    await act(async () => {
+      await result.current.loadVoices();
+    });
+    await startAndSettle(result);
+    expect(result.current.snapshot.canNext).toBe(true);
+    await act(async () => {
+      result.current.nextChunk();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(result.current.snapshot).toMatchObject({
+      currentText: "Second",
+      canPrevious: true,
+      canNext: false,
+    });
+    await act(async () => {
+      result.current.previousChunk();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(result.current.snapshot).toMatchObject({
+      currentText: "First",
+      canPrevious: false,
+    });
+    rerender({ bookmarkId: "bookmark-2" });
+    expect(result.current.snapshot).toMatchObject({
+      status: "idle",
+      currentText: null,
+      canPrevious: false,
+      canNext: false,
+    });
+  });
+
   it("preloads voices for eligible readers without generating audio", async () => {
     const { result, rerender } = renderHook(
       ({ enabled }) => useReadAloud("bookmark-1", enabled),

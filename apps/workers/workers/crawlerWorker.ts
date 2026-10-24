@@ -66,6 +66,7 @@ import {
   ASSET_TYPES,
   AssetPreprocessingQueue,
   EmbeddingsQueue,
+  enqueueSpeechPreparation,
   getAssetSize,
   getTracer,
   IMAGE_ASSET_TYPES,
@@ -515,7 +516,12 @@ async function checkDomainRateLimit(ctx: CrawlContext): Promise<void> {
     return;
   }
 
-  const hostname = new URL(url).hostname;
+  let hostname: string;
+  try {
+    hostname = new URL(url).hostname;
+  } catch {
+    throw new Error("Invalid crawl URL");
+  }
   const rateLimitResult = await rateLimitClient.checkRateLimit(
     {
       name: "domain-ratelimit",
@@ -833,7 +839,12 @@ const handleAsAssetBookmark = traced(
         `[Crawler][${jobId}] Failed to download required ${assetType} asset`,
       );
     }
-    const fileName = path.basename(new URL(url).pathname);
+    let fileName: string;
+    try {
+      fileName = path.basename(new URL(url).pathname);
+    } catch {
+      throw new Error("Invalid asset URL");
+    }
     await db.transaction((trx) => {
       updateAsset(
         undefined,
@@ -1806,6 +1817,7 @@ async function enqueuePostCrawlJobs(
 
   // Update the search index
   await triggerSearchReindex(bookmarkId, enqueueOpts);
+  await enqueueSpeechPreparation(bookmarkId, { groupId: userId });
 
   if (serverConfig.crawler.downloadVideo) {
     // Trigger a potential download of a video from the URL

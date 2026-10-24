@@ -92,6 +92,70 @@ function sendJson(res: http.ServerResponse, status: number, body: unknown) {
 }
 
 describe("synthesizeTimedSpeech", () => {
+  it("defers background jobs during worker restarts rather than exhausting retries", async () => {
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockRejectedValue(new TypeError("fetch failed"));
+    config.speech.kokoroUrl = "http://127.0.0.1:4320";
+    config.speech.kokoroToken = "synthetic-test-credential";
+    try {
+      await expect(
+        synthesizeTimedSpeech("Hello", "kokoro:bf_emma", { background: true }),
+      ).rejects.toMatchObject({
+        name: "SpeechBusyError",
+        retryAfterSeconds: 5,
+      });
+      await expect(
+        synthesizeTimedSpeech("Hello", "kokoro:bf_emma"),
+      ).rejects.toBeInstanceOf(SpeechUpstreamError);
+      const controller = new AbortController();
+      controller.abort();
+      await expect(
+        synthesizeTimedSpeech("Hello", "kokoro:bf_emma", {
+          background: true,
+          signal: controller.signal,
+        }),
+      ).rejects.toMatchObject({ name: "AbortError" });
+    } finally {
+      fetchSpy.mockRestore();
+      config.speech.kokoroUrl = undefined;
+      config.speech.kokoroToken = undefined;
+    }
+  });
+
+  it("marks preparation as background work and forwards cancellation and retry delays", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(null, {
+        status: 503,
+        headers: { "Retry-After": "30" },
+      }),
+    );
+    const controller = new AbortController();
+    config.speech.kokoroUrl = "http://127.0.0.1:4320";
+    config.speech.kokoroToken = "synthetic-test-credential";
+    try {
+      await expect(
+        synthesizeTimedSpeech("Hello", "kokoro:bf_emma", {
+          background: true,
+          signal: controller.signal,
+        }),
+      ).rejects.toMatchObject({
+        name: "SpeechBusyError",
+        retryAfterSeconds: 30,
+      });
+      const options = fetchSpy.mock.calls[0]![1]!;
+      expect(options.headers).toMatchObject({
+        "X-Speech-Priority": "background",
+      });
+      controller.abort();
+      expect(options.signal?.aborted).toBe(true);
+    } finally {
+      fetchSpy.mockRestore();
+      config.speech.kokoroUrl = undefined;
+      config.speech.kokoroToken = undefined;
+    }
+  });
+
   it("forwards only the Kokoro token and rejects invalid word ranges", async () => {
     let invalid = false;
     const stub = await startStub((_req, res) =>
