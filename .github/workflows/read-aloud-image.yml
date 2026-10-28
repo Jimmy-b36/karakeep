@@ -1,14 +1,16 @@
 name: Read Aloud AIO Image (ARM64)
 
-# Fork-specific workflow for the karakeep-read-aloud fork. Builds only the aio
-# image for linux/arm64 and publishes it under the fork's GHCR namespace with an
-# immutable sha-<commit> tag. The parent workflow/deployment consumes the
-# registry digest from this run's summary.
+# Fork-only ARM64 build, smoke test, immutable publication and verified deployment.
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
 
 jobs:
   build:
+    if: github.repository == 'Jimmy-b36/karakeep'
+    outputs:
+      digest: ${{ steps.push.outputs.digest }}
     runs-on: ubuntu-24.04-arm
     permissions:
       contents: read
@@ -100,3 +102,31 @@ jobs:
             echo "- Image: \`${IMAGE}\`"
             echo "- Digest: \`${DIGEST}\`"
           } >> "${GITHUB_STEP_SUMMARY}"
+
+  deploy:
+    needs: build
+    if: github.repository == 'Jimmy-b36/karakeep' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    # Builds may run concurrently, but production mutations never overlap.
+    # Freshness is checked inside the lock: pending job ordering is not FIFO.
+    concurrency:
+      group: karakeep-production-web
+      cancel-in-progress: false
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+      - name: Install deployment dependency
+        run: python3 -m pip install --disable-pip-version-check PyYAML==6.0.3
+      - name: Test deployment safety contracts
+        run: python3 -m unittest discover -s scripts -p test_deploy_read_aloud.py -v
+      - name: Deploy and verify web application (rollback on failure)
+        env:
+          COOLIFY_TOKEN: ${{ secrets.COOLIFY_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
+          DEPLOY_IMAGE: ${{ needs.build.outputs.digest }}
+        run: python3 scripts/deploy_read_aloud.py
