@@ -15,6 +15,7 @@ import {
   ClipboardList,
   Highlighter,
   Home,
+  Rss,
   Search,
   Tag,
 } from "lucide-react";
@@ -71,6 +72,11 @@ export default async function Dashboard({
             },
           ]
         : [],
+      {
+        name: t("common.rss"),
+        icon: <Rss size={18} />,
+        path: "/dashboard/feeds",
+      },
       {
         name: t("common.tags"),
         icon: <Tag size={18} />,

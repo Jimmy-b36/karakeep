@@ -2,11 +2,14 @@ import { TRPCError } from "@trpc/server";
 import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
-import { createHash } from "node:crypto";
 import { z } from "zod";
 
 import serverConfig from "@karakeep/shared/config";
-import { htmlToSpeechText } from "@karakeep/shared/utils/htmlUtils";
+import {
+  chunkKokoroSpeech,
+  readableSpeechText,
+  speechContentVersion,
+} from "@karakeep/shared/utils/speech";
 import {
   alignedSpeechConfigured,
   getSpeechVoices,
@@ -84,7 +87,12 @@ function isJsonContentType(contentType: string | undefined): boolean {
 function isSameOrigin(c: {
   req: { header: (name: string) => string | undefined };
 }): boolean {
-  const publicOrigin = new URL(serverConfig.publicUrl).origin;
+  let publicOrigin: string;
+  try {
+    publicOrigin = new URL(serverConfig.publicUrl).origin;
+  } catch {
+    return false;
+  }
   const origin = c.req.header("Origin");
   if (origin) {
     return origin === publicOrigin;
@@ -149,17 +157,11 @@ export const speechBookmarkRoutes = new Hono()
     if (content.type !== BookmarkTypes.LINK) {
       return c.json({ error: "This bookmark cannot be read aloud." }, 422);
     }
-    const speechText = htmlToSpeechText(content.htmlContent ?? "")
-      .replace(/\r\n?/g, "\n")
-      .trim();
+    const speechText = readableSpeechText(content.htmlContent ?? "");
     if (!speechText) {
       return c.json({ error: "This bookmark has no readable content." }, 422);
     }
-    const speechVersion = `sha256:${createHash("sha256")
-      .update("text")
-      .update("\0")
-      .update(speechText)
-      .digest("hex")}`;
+    const speechVersion = speechContentVersion(speechText);
     if (contentVersion !== undefined && contentVersion !== speechVersion) {
       return c.json(
         { error: "The bookmark content changed. Restart read-aloud." },
@@ -180,10 +182,9 @@ export const speechBookmarkRoutes = new Hono()
     }
 
     let maxChars = SPEECH_CHUNK_MAX_CHARS;
-    if (voice.startsWith("kokoro:") || alignedSpeechConfigured()) {
-      // Short first chunks reduce startup latency; keep Kokoro requests small throughout.
-      const limit =
-        voice.startsWith("kokoro:") || contentVersion === undefined ? 160 : 400;
+    if (alignedSpeechConfigured()) {
+      // Short first chunks reduce startup latency for the optional aligner.
+      const limit = contentVersion === undefined ? 160 : 400;
       maxChars = Math.min(limit, characters.length - start);
       if (start + maxChars < characters.length) {
         for (let offset = maxChars - 1; offset >= limit / 2; offset--) {
@@ -194,14 +195,16 @@ export const speechBookmarkRoutes = new Hono()
         }
       }
     }
-    const chunk = chunkReadableContent({
-      bookmarkId,
-      content: speechText,
-      contentVersion: speechVersion,
-      format: "text",
-      maxChars: Math.max(0, maxChars),
-      start,
-    });
+    const chunk = voice.startsWith("kokoro:")
+      ? chunkKokoroSpeech(bookmarkId, speechText, start, speechVersion)
+      : chunkReadableContent({
+          bookmarkId,
+          content: speechText,
+          contentVersion: speechVersion,
+          format: "text",
+          maxChars: Math.max(0, maxChars),
+          start,
+        });
     if (!chunk || chunk.content.length === 0) {
       return c.json({ error: "No more content to read." }, 422);
     }

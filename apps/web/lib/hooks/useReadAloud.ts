@@ -58,6 +58,8 @@ export type VoicesStatus = "idle" | "loading" | "ready" | "error";
 export function useReadAloud(bookmarkId: string, enabled: boolean) {
   const [snapshot, setSnapshot] = useState<ReadAloudSnapshot>({
     status: "idle",
+    canPrevious: false,
+    canNext: false,
     error: null,
     currentText: null,
   });
@@ -96,6 +98,7 @@ export function useReadAloud(bookmarkId: string, enabled: boolean) {
       speedRef.current,
     );
     playerRef.current = player;
+    setSnapshot(player.currentSnapshot);
     return () => {
       player.dispose();
       playerRef.current = null;
@@ -106,7 +109,13 @@ export function useReadAloud(bookmarkId: string, enabled: boolean) {
   // playback and clears the previous session's UI state.
   useEffect(() => {
     if (!enabled) {
-      setSnapshot({ status: "idle", error: null, currentText: null });
+      setSnapshot({
+        status: "idle",
+        canPrevious: false,
+        canNext: false,
+        error: null,
+        currentText: null,
+      });
     }
   }, [enabled]);
 
@@ -205,6 +214,14 @@ export function useReadAloud(bookmarkId: string, enabled: boolean) {
     },
     [loadVoices],
   );
+  const previousChunk = useCallback(() => {
+    startRequestRef.current++;
+    playerRef.current?.previousChunk();
+  }, []);
+  const nextChunk = useCallback(() => {
+    startRequestRef.current++;
+    playerRef.current?.nextChunk();
+  }, []);
   const pause = useCallback(() => {
     playerRef.current?.pause();
   }, []);
@@ -231,6 +248,8 @@ export function useReadAloud(bookmarkId: string, enabled: boolean) {
     loadVoices,
     start,
     startAt,
+    previousChunk,
+    nextChunk,
     pause,
     resume,
     stop,

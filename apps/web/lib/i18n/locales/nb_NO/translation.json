@@ -1,6 +1,7 @@
 {
   "common": {
     "home": "Hjem",
+    "rss": "Feeder",
     "name": "Navn",
     "roles": {
       "user": "Bruker",
@@ -251,6 +252,8 @@
     "bulk_edit": "Masseendring",
     "manage_lists": "Administrer lister",
     "save": "Lagre",
+    "save_to_library": "Lagre i biblioteket",
+    "saved_to_library": "Lagret i biblioteket",
     "add": "Legg til",
     "edit": "Rediger",
     "create": "Opprett",
@@ -1053,6 +1056,7 @@
       "delete_from_list": "Bokmerket er slettet fra lista",
       "clipboard_copied": "Lenken er lagt til utklippstavlen din!",
       "updated": "Bokmerket er oppdatert!",
+      "saved_to_library": "Bokmerket er lagret i biblioteket ditt!",
       "deleted": "Bokmerket er slettet!",
       "preserve_pdf": "PDF-bevaring er utløst",
       "update_banner": "Banneret er oppdatert!",
@@ -1070,6 +1074,10 @@
       "updated": "Etiketten har blitt oppdatert!",
       "failed_to_update": "Kunne ikke oppdatere etikett"
     }
+  },
+  "feeds": {
+    "all_feeds": "Alle feeder",
+    "manage_feeds": "Administrer feeder"
   },
   "cleanups": {
     "cleanups": "Opprydninger",
@@ -1114,6 +1122,14 @@
     "no_bookmarks": {
       "title": "Ingen bokmerker ennå",
       "description": "Lagre interessante artikler, lenker og sider for å få rask tilgang til dem senere."
+    },
+    "no_subscriptions": {
+      "title": "Ingen RSS-abonnementer ennå",
+      "description": "Abonner på feeder, så vises nye artikler automatisk her."
+    },
+    "no_feed_articles": {
+      "title": "Ingen artikler fra feedene dine ennå",
+      "description": "Nye artikler fra abonnementene dine vises her når de er hentet."
     }
   },
   "bookmark_editor": {

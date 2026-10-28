@@ -858,6 +858,7 @@ export interface components {
         | "rss"
         | "import"
         | null;
+      inLibrary: boolean;
       userId: string;
       tags: {
         id: string;
@@ -1458,6 +1459,7 @@ export interface operations {
               | "rss"
               | "import"
               | null;
+            inLibrary: boolean;
             userId: string;
           };
         };
@@ -1596,6 +1598,7 @@ export interface operations {
               | "rss"
               | "import"
               | null;
+            inLibrary: boolean;
             userId: string;
           };
         };
@@ -2361,7 +2364,7 @@ export interface operations {
         sort?: "name" | "usage" | "relevance";
         attachedBy?: "ai" | "human" | "none";
         cursor?: string;
-        limit?: number | null;
+        limit?: number;
       };
       header?: never;
       path?: never;

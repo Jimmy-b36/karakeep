@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import serverConfig from "@karakeep/shared/config";
+
 import {
   EnqueueOptions,
   getQueueClient,
@@ -114,6 +116,37 @@ export const LowPriorityCrawlerQueue = createDeferredQueue<ZCrawlLinkRequest>(
 // distinct keys so non-equivalent crawls are not deduped together.
 export function buildCrawlIdempotencyKey(payload: ZCrawlLinkRequest): string {
   return `crawl:${JSON.stringify(payload, Object.keys(payload).sort())}`;
+}
+
+export const zSpeechPreparationRequestSchema = z.object({
+  bookmarkId: z.string(),
+  start: z.number().int().nonnegative(),
+  contentVersion: z.string().optional(),
+});
+export type ZSpeechPreparationRequest = z.infer<
+  typeof zSpeechPreparationRequestSchema
+>;
+
+export const SpeechPreparationQueue =
+  createDeferredQueue<ZSpeechPreparationRequest>("speech_preparation_queue", {
+    defaultJobArgs: { numRetries: 5 },
+    keepFailedJobs: false,
+  });
+
+export async function enqueueSpeechPreparation(
+  bookmarkId: string,
+  opts?: Omit<EnqueueOptions, "idempotencyKey">,
+) {
+  if (!serverConfig.speech.kokoroUrl || !serverConfig.speech.kokoroToken)
+    return;
+  await SpeechPreparationQueue.enqueue(
+    { bookmarkId, start: 0 },
+    {
+      priority: QueuePriority.Low,
+      ...opts,
+      idempotencyKey: `speech:${bookmarkId}:initial`,
+    },
+  );
 }
 
 // Inference Worker

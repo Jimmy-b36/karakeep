@@ -197,6 +197,9 @@ export const zBareBookmarkSchema = z.object({
   note: z.string().nullish(),
   summary: z.string().nullish(),
   source: zBookmarkSourceSchema.nullish(),
+  // Whether the bookmark belongs to the user's main library (Home). RSS
+  // imports start as false; explicit saves flip it to true.
+  inLibrary: z.boolean(),
   userId: z.string(),
 });
 
@@ -290,6 +293,12 @@ export const zGetBookmarksRequestSchema = z.object({
   tagId: z.string().optional(),
   listId: z.string().optional(),
   rssFeedId: z.string().optional(),
+  // Only bookmarks that are in the library (Home). Omitting the filter
+  // preserves the unfiltered behavior for existing clients.
+  inLibrary: z.boolean().optional(),
+  // Only RSS-sourced bookmarks or bookmarks with an import association to one
+  // of the user's feeds. Cannot be combined with listId, tagId, or rssFeedId.
+  rssOnly: z.boolean().optional(),
   limit: z.number().int().min(1).max(MAX_NUM_BOOKMARKS_PER_PAGE).optional(),
   cursor: zCursorV2.nullish(),
   // TODO: This was done for backward comptability. At this point, all clients should be settings this to true.

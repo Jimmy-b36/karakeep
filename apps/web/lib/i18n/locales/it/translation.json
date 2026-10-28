@@ -20,6 +20,8 @@
     "manage_lists": "Gestisci liste",
     "remove_from_list": "Rimuovi dalla lista",
     "save": "Salva",
+    "save_to_library": "Salva nella libreria",
+    "saved_to_library": "Salvato nella libreria",
     "add": "Aggiungi",
     "create": "Crea",
     "fetch_now": "Recupera ora",
@@ -78,6 +80,7 @@
     "screenshot": "Screenshot",
     "archive": "Archivio",
     "home": "Home",
+    "rss": "Fonti",
     "url": "URL",
     "type": "Tipo",
     "bookmark_types": {
@@ -1011,6 +1014,7 @@
   "toasts": {
     "bookmarks": {
       "updated": "Il segnalibro è stato aggiornato!",
+      "saved_to_library": "Il segnalibro è stato salvato nella tua libreria!",
       "deleted": "Il segnalibro è stato eliminato!",
       "refetch": "L'aggiornamento è stato messo in coda!",
       "full_page_archive": "L'archivio della pagina completa è stato attivato",
@@ -1032,6 +1036,10 @@
       "updated": "Il tag è stato aggiornato!",
       "failed_to_update": "Impossibile aggiornare il tag"
     }
+  },
+  "feeds": {
+    "all_feeds": "Tutte le fonti",
+    "manage_feeds": "Gestisci fonti"
   },
   "cleanups": {
     "cleanups": "Pulizie",
@@ -1114,6 +1122,14 @@
     "no_bookmarks": {
       "description": "Salva articoli, link e pagine interessanti per accedervi rapidamente in seguito.",
       "title": "Ancora nessun segnalibro"
+    },
+    "no_subscriptions": {
+      "title": "Ancora nessuna iscrizione RSS",
+      "description": "Iscriviti alle fonti e i loro nuovi articoli appariranno qui automaticamente."
+    },
+    "no_feed_articles": {
+      "title": "Ancora nessun articolo dalle tue fonti",
+      "description": "I nuovi articoli delle tue iscrizioni appariranno qui quando verranno recuperati."
     }
   },
   "bookmark_editor": {

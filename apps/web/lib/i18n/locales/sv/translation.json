@@ -23,6 +23,7 @@
     "search": "Sök",
     "tags": "Taggar",
     "home": "Hem",
+    "rss": "Flöden",
     "highlights": "Höjdpunkter",
     "source": "Källa",
     "bookmark_types": {
@@ -77,6 +78,8 @@
     "edit_tags": "Ändra taggar",
     "summarize_with_ai": "Sammanfatta med AI",
     "save": "Spara",
+    "save_to_library": "Spara i biblioteket",
+    "saved_to_library": "Sparat i biblioteket",
     "merge": "Sammanfoga",
     "sort": {
       "title": "Sortera",
@@ -995,6 +998,7 @@
   "toasts": {
     "bookmarks": {
       "updated": "Bokmärket har uppdaters!",
+      "saved_to_library": "Bokmärket har sparats i ditt bibliotek!",
       "full_page_archive": "Skapande av fullsidesarkiv har startats",
       "deleted": "Bokmärket har raderats!",
       "delete_from_list": "Bokmärket har raderats från listan",
@@ -1016,6 +1020,10 @@
       "updated": "Taggen har uppdaterats!",
       "failed_to_update": "Misslyckades med att uppdatera taggen"
     }
+  },
+  "feeds": {
+    "all_feeds": "Alla flöden",
+    "manage_feeds": "Hantera flöden"
   },
   "cleanups": {
     "duplicate_tags": {
@@ -1114,6 +1122,14 @@
     "no_bookmarks": {
       "title": "Inga bokmärken än",
       "description": "Spara intressanta artiklar, länkar och sidor för att snabbt komma åt dem senare."
+    },
+    "no_subscriptions": {
+      "title": "Inga RSS-prenumerationer än",
+      "description": "Prenumerera på flöden så visas deras nya artiklar här automatiskt."
+    },
+    "no_feed_articles": {
+      "title": "Inga artiklar från dina flöden än",
+      "description": "Nya artiklar från dina prenumerationer visas här när de hämtats."
     }
   },
   "bookmark_editor": {

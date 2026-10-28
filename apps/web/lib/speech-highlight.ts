@@ -139,7 +139,11 @@ function highlightRange(
   }
 
   try {
-    firstSpan?.scrollIntoView({ block: "nearest" });
+    firstSpan?.scrollIntoView({
+      block: "center",
+      inline: "nearest",
+      behavior: "instant",
+    });
   } catch {
     // scrollIntoView is unavailable in some test environments.
   }

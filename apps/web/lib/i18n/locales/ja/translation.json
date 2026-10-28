@@ -16,6 +16,8 @@
     "manage_lists": "リストの管理",
     "remove_from_list": "リストから削除",
     "save": "保存",
+    "save_to_library": "ライブラリに保存",
+    "saved_to_library": "ライブラリに保存済み",
     "edit_title": "タイトルの編集",
     "sign_out": "サインアウト",
     "close": "閉じる",
@@ -769,6 +771,7 @@
     "archive": "アーカイブ",
     "key": "キー",
     "home": "ホーム",
+    "rss": "フィード",
     "actions": "アクション",
     "created_at": "作成日",
     "type": "種類",
@@ -1078,6 +1081,7 @@
   "toasts": {
     "bookmarks": {
       "updated": "ブックマークが更新されました！",
+      "saved_to_library": "ブックマークがライブラリに保存されました！",
       "clipboard_copied": "リンクをクリップボードにコピーしました！",
       "full_page_archive": "フルページアーカイブの作成が開始されました",
       "delete_from_list": "ブックマークがリストから削除されました",
@@ -1100,6 +1104,10 @@
       "failed_to_update": "タグの更新に失敗しました"
     }
   },
+  "feeds": {
+    "all_feeds": "すべてのフィード",
+    "manage_feeds": "フィードを管理"
+  },
   "cleanups": {
     "duplicate_tags": {
       "title": "重複タグ",
@@ -1114,6 +1122,14 @@
     "no_bookmarks": {
       "title": "ブックマークはまだありません",
       "description": "気になる記事、リンク、ページを保存して、後ですぐにアクセスできるようにしましょう。"
+    },
+    "no_subscriptions": {
+      "title": "RSS 購読はまだありません",
+      "description": "フィードを購読すると、新しい記事がここに自動的に表示されます。"
+    },
+    "no_feed_articles": {
+      "title": "フィードからの記事はまだありません",
+      "description": "購読しているフィードの新しい記事は、取得されるとここに表示されます。"
     }
   },
   "bookmark_editor": {

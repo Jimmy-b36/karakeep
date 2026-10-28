@@ -66,7 +66,7 @@ def main():
             samples.append(audio)
             offset += duration
         assert tokens and samples
-        assert all(a["start"] <= b["start"] for a, b in zip(tokens, tokens[1:]))
+        assert all(a["start"] <= b["start"] for a, b in zip(tokens, tokens[1:], strict=False))
         elapsed = time.monotonic() - started
         audio = np.concatenate(samples)
         with wave.open(str(output / f"sample-{index}.wav"), "wb") as wav:

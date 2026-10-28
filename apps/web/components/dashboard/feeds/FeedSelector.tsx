@@ -17,11 +17,14 @@ export function FeedSelector({
   onChange,
   placeholder = "Select a feed",
   className,
+  // Sentinel value "all" is reserved and emitted by onChange when the all-item is picked.
+  allItemLabel,
 }: {
   className?: string;
   value?: string | null;
   onChange: (value: string) => void;
   placeholder?: string;
+  allItemLabel?: string;
 }) {
   const api = useTRPC();
   const { data, isPending } = useQuery(
@@ -41,6 +44,7 @@ export function FeedSelector({
       </SelectTrigger>
       <SelectContent>
         <SelectGroup>
+          {allItemLabel && <SelectItem value="all">{allItemLabel}</SelectItem>}
           {data?.map((f) => (
             <SelectItem key={f.id} value={f.id}>
               {f.name}

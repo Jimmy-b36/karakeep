@@ -37,6 +37,8 @@
     "close": "Bezárás",
     "close_bulk_edit": "Tömeges szerkesztés bezárása",
     "save": "Mentés",
+    "save_to_library": "Mentés a könyvtárba",
+    "saved_to_library": "Mentve a könyvtárba",
     "open_editor": "Szerkesztő megnyitása",
     "toggle_show_archived": "Archiváltak megjelenítése",
     "confirm": "Megerősít",
@@ -597,6 +599,7 @@
     "screenshot": "Képernyőkép",
     "video": "Videó",
     "home": "Otthon",
+    "rss": "Hírforrások",
     "key": "Kulcs",
     "search": "Keresés",
     "type": "Típus",
@@ -1078,6 +1081,7 @@
   "toasts": {
     "bookmarks": {
       "updated": "A könyvjelző frissítve lett!",
+      "saved_to_library": "A könyvjelző el lett mentve a könyvtárba!",
       "deleted": "A könyvjelző törölve lett!",
       "refetch": "Újra begyűjtés beütemezve!",
       "full_page_archive": "Minden oldal lecserélése beütemezésre került",
@@ -1100,6 +1104,10 @@
       "failed_to_update": "Címke frissítése sikertelen"
     }
   },
+  "feeds": {
+    "all_feeds": "Összes hírforrás",
+    "manage_feeds": "Hírforrások kezelése"
+  },
   "cleanups": {
     "cleanups": "Tisztítás",
     "duplicate_tags": {
@@ -1114,6 +1122,14 @@
     "no_bookmarks": {
       "title": "Még nincsenek könyvjelzők",
       "description": "Mentsd el az érdekes cikkeket, linkeket és oldalakat, hogy később gyorsan elérhesd őket."
+    },
+    "no_subscriptions": {
+      "title": "Még nincsenek RSS feliratkozások",
+      "description": "Iratkozz fel hírforrásokra, és új cikkeik automatikusan itt jelennek meg."
+    },
+    "no_feed_articles": {
+      "title": "Még nincsenek cikkek a hírforrásokból",
+      "description": "A feliratkozások új cikkei itt jelennek meg, miután letöltésre kerültek."
     }
   },
   "bookmark_editor": {

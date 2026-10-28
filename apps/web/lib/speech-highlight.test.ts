@@ -90,6 +90,27 @@ describe("speech offsets", () => {
 });
 
 describe("applySpeechHighlight", () => {
+  it("centers each spoken word without horizontal jumps or scroll animations", () => {
+    const container = createContainer("<p>First second</p>");
+    const scroll = vi.mocked(HTMLElement.prototype.scrollIntoView);
+
+    for (const word of [
+      { from: 0, to: 5 },
+      { from: 6, to: 12 },
+    ]) {
+      applySpeechHighlight(container, "First second", word);
+      expect(scroll).toHaveBeenLastCalledWith({
+        block: "center",
+        inline: "nearest",
+        behavior: "instant",
+      });
+      expect(scroll.mock.instances.at(-1)).toBe(highlightedSpan(container));
+    }
+    expect(scroll).toHaveBeenCalledTimes(2);
+    applySpeechHighlight(container, null);
+    expect(scroll).toHaveBeenCalledTimes(2);
+  });
+
   it("matches the opening chunk after leading article whitespace", () => {
     const container = createContainer(
       '<div class="page"><section>\n\t\n<p>Working with outside collaborators.</p>\n<p>A second paragraph.</p></section></div>',

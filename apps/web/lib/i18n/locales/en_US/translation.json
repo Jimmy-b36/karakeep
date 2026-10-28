@@ -29,6 +29,7 @@
     "video": "Video",
     "archive": "Archive",
     "home": "Home",
+    "rss": "Feeds",
     "title": "Title",
     "description": "Description",
     "summary": "Summary",
@@ -80,6 +81,8 @@
     "manage_lists": "Manage Lists",
     "remove_from_list": "Remove from List",
     "save": "Save",
+    "save_to_library": "Save to Library",
+    "saved_to_library": "Saved to Library",
     "add": "Add",
     "edit": "Edit",
     "open_editor": "Open Editor",
@@ -1154,6 +1157,7 @@
       "delete_from_list": "The bookmark has been deleted from the list",
       "clipboard_copied": "Link has been added to your clipboard!",
       "updated": "The bookmark has been updated!",
+      "saved_to_library": "The bookmark has been saved to your library!",
       "update_banner": "Banner has been updated!",
       "uploading_banner": "Uploading banner..."
     },
@@ -1177,10 +1181,22 @@
       "bulk_delete_confirmation_description": "Are you sure you want to delete {{count}} bookmarks?"
     }
   },
+  "feeds": {
+    "all_feeds": "All Feeds",
+    "manage_feeds": "Manage feeds"
+  },
   "banners": {
     "no_bookmarks": {
       "title": "No bookmarks yet",
       "description": "Save interesting articles, links, and pages to access them quickly later."
+    },
+    "no_subscriptions": {
+      "title": "No RSS subscriptions yet",
+      "description": "Subscribe to feeds and their new articles will show up here automatically."
+    },
+    "no_feed_articles": {
+      "title": "No articles from your feeds yet",
+      "description": "New articles from your subscriptions will appear here when they are fetched."
     }
   },
   "cleanups": {

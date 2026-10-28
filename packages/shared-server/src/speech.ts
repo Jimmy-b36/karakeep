@@ -52,6 +52,10 @@ const MAX_ALIGN_RESPONSE_BYTES = 1024 * 1024;
 const MAX_TIMED_AUDIO_BASE64 = 45_000_000;
 
 type WorkerKind = "speech" | "kokoro" | "align";
+interface SpeechRequestOptions {
+  background?: boolean;
+  signal?: AbortSignal;
+}
 
 export function resolveSpeechEndpoint(
   baseUrl: string | undefined,
@@ -147,6 +151,7 @@ async function workerRequest(
   path: string,
   body?: unknown,
   kind: WorkerKind = "speech",
+  options: SpeechRequestOptions = {},
 ): Promise<Response> {
   const { url, token } = resolveSpeechEndpoint(
     kind === "kokoro"
@@ -170,18 +175,29 @@ async function workerRequest(
       headers: {
         Authorization: `Bearer ${token}`,
         ...(body === undefined ? {} : { "Content-Type": "application/json" }),
+        ...(options.background ? { "X-Speech-Priority": "background" } : {}),
       },
       body: body === undefined ? undefined : JSON.stringify(body),
       redirect: "error",
-      signal: AbortSignal.timeout(
-        path === "/voices"
-          ? 5000
-          : kind === "align"
-            ? ALIGN_TIMEOUT_MS
-            : WORKER_TIMEOUT_MS,
-      ),
+      signal: AbortSignal.any([
+        ...(options.signal ? [options.signal] : []),
+        AbortSignal.timeout(
+          path === "/voices"
+            ? 5000
+            : kind === "align"
+              ? ALIGN_TIMEOUT_MS
+              : WORKER_TIMEOUT_MS,
+        ),
+      ]),
     });
   } catch {
+    options.signal?.throwIfAborted();
+    if (options.background) {
+      throw new SpeechBusyError(
+        "Local speech worker is restarting. Please retry.",
+        5,
+      );
+    }
     throw new SpeechUpstreamError("Local speech worker is unavailable.");
   }
 
@@ -270,7 +286,11 @@ async function getWorkerVoices(kokoro: boolean): Promise<SpeechVoice[]> {
   return voices;
 }
 
-export async function synthesizeTimedSpeech(text: string, voice: string) {
+export async function synthesizeTimedSpeech(
+  text: string,
+  voice: string,
+  options: SpeechRequestOptions = {},
+) {
   if (
     !voice.startsWith("kokoro:") ||
     !text.trim() ||
@@ -283,6 +303,7 @@ export async function synthesizeTimedSpeech(text: string, voice: string) {
     "/synthesize",
     { text, voice },
     "kokoro",
+    options,
   );
   const bytes = await readBodyCapped(response, MAX_TIMED_AUDIO_BASE64);
   try {

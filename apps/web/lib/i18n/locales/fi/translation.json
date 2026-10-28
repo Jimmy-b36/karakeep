@@ -27,6 +27,7 @@
     "video": "Video",
     "archive": "Arkistoi",
     "home": "Koti",
+    "rss": "Syötteet",
     "title": "Otsikko",
     "description": "Kuvaus",
     "summary": "Yhteenveto",
@@ -71,6 +72,8 @@
     "manage_lists": "Hallitse listoja",
     "remove_from_list": "Poista listalta",
     "save": "Tallenna",
+    "save_to_library": "Tallenna kirjastoon",
+    "saved_to_library": "Tallennettu kirjastoon",
     "add": "Lisää",
     "edit": "Muokkaa",
     "open_editor": "Avaa editori",
@@ -1082,6 +1085,7 @@
   "toasts": {
     "bookmarks": {
       "updated": "Kirjanmerkki on päivitetty!",
+      "saved_to_library": "Kirjanmerkki on tallennettu kirjastoosi!",
       "deleted": "Kirjanmerkki on poistettu!",
       "refetch": "Uudelleennouto on jonossa!",
       "full_page_archive": "Koko sivun arkiston luonti on käynnistetty",
@@ -1104,10 +1108,22 @@
       "failed_to_update": "Tunnisteen päivitys epäonnistui"
     }
   },
+  "feeds": {
+    "all_feeds": "Kaikki syötteet",
+    "manage_feeds": "Hallitse syötteitä"
+  },
   "banners": {
     "no_bookmarks": {
       "title": "Ei vielä kirjanmerkkejä",
       "description": "Tallenna mielenkiintoisia artikkeleita, linkkejä ja sivuja, jotta voit käyttää niitä nopeasti myöhemmin."
+    },
+    "no_subscriptions": {
+      "title": "Ei vielä RSS-tilauksia",
+      "description": "Tilaa syötteitä ja niiden uudet artikkelit ilmestyvät tänne automaattisesti."
+    },
+    "no_feed_articles": {
+      "title": "Ei vielä artikkeleita syötteistäsi",
+      "description": "Uudet artikkelit tilauksistasi ilmestyvät tänne, kun ne on haettu."
     }
   },
   "cleanups": {

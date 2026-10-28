@@ -149,9 +149,11 @@ export default function BookmarksGrid({
   fetchNextPage = () => ({}),
   isFetchingNextPage = false,
   showEditorCard = false,
+  emptyState,
 }: {
   bookmarks: ZBookmark[];
   showEditorCard?: boolean;
+  emptyState?: React.ReactNode;
   hasNextPage?: boolean;
   isFetchingNextPage?: boolean;
   fetchNextPage?: () => void;
@@ -221,7 +223,7 @@ export default function BookmarksGrid({
   if (bookmarks.length == 0 && !showEditorCard) {
     return (
       <>
-        <NoBookmarksBanner />
+        {emptyState ?? <NoBookmarksBanner />}
         <KeyboardShortcutsDialog
           open={helpDialogOpen}
           setOpen={setHelpDialogOpen}

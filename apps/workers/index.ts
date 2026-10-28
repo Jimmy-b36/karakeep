@@ -17,6 +17,7 @@ import {
   prepareQueue,
   RuleEngineQueue,
   SearchIndexingQueue,
+  SpeechPreparationQueue,
   shutdownEventLogger,
   shutdownTracing,
   startQueue,
@@ -56,6 +57,11 @@ const workerBuilders = {
       await import("./workers/inference/inferenceWorker");
     await OpenAIQueue.ensureInit();
     return OpenAiWorker.build();
+  },
+  speech: async () => {
+    const { SpeechWorker } = await import("./workers/speechWorker");
+    await SpeechPreparationQueue.ensureInit();
+    return SpeechWorker.build();
   },
   search: async () => {
     const { SearchIndexingWorker } = await import("./workers/searchWorker");
@@ -143,6 +149,13 @@ async function main() {
   );
 
   await startQueue();
+
+  if (workers.some((worker) => worker.name === "speech")) {
+    const { prepareRecentSpeech } = await import("./workers/speechWorker");
+    void prepareRecentSpeech().catch((error: unknown) => {
+      logger.error(`[speech] Could not queue recent articles: ${error}`);
+    });
+  }
 
   if (workers.some((w) => w.name === "feed")) {
     feedRefreshingWorker?.start();

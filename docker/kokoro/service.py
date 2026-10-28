@@ -1,18 +1,36 @@
 """Private, offline Kokoro service. Audio and timings come from the same synthesis."""
 import base64
-import hashlib
 import hmac
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import io
 import json
 import os
-from pathlib import Path
+import sys
 import threading
+import time
+import traceback
 import wave
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 MODEL_REVISION = "f3ff3571791e39611d31c381e3a41a3af07b4987"
-MODEL_HASH = "496dba118d1a58f5f3db2efc88dbdc216e0483fc89fe6e47ee1f2c53f18ad1e4"
-VOICE = "kokoro:af_heart"
+VOICES = {
+    "af_heart": ("Heart · American female", "en-US"),
+    "af_bella": ("Bella · American female", "en-US"),
+    "am_adam": ("Adam · American male", "en-US"),
+    "am_michael": ("Michael · American male", "en-US"),
+    "bf_emma": ("Emma · British female", "en-GB"),
+    "bf_isabella": ("Isabella · British female", "en-GB"),
+    "bm_george": ("George · British male", "en-GB"),
+    "bm_lewis": ("Lewis · British male", "en-GB"),
+}
+
+
+def voice_id(value):
+    if not isinstance(value, str) or not value.startswith("kokoro:"):
+        raise ValueError("Invalid voice")
+    name = value.removeprefix("kokoro:")
+    if name not in VOICES:
+        raise ValueError("Invalid voice")
+    return name
 
 
 def synthesize(pipeline, voice_file, text):
@@ -41,7 +59,7 @@ def synthesize(pipeline, voice_file, text):
             words.append({"from": begin, "to": finish, "start": elapsed + start, "end": elapsed + end})
         audio_parts.append(audio)
         elapsed += duration
-    if not words or not audio_parts or any(a["start"] > b["start"] for a, b in zip(words, words[1:])):
+    if not words or not audio_parts or any(a["start"] > b["start"] for a, b in zip(words, words[1:], strict=False)):
         raise ValueError("No usable word alignment")
     audio = np.concatenate(audio_parts)
     output = io.BytesIO()
@@ -56,41 +74,41 @@ def synthesize(pipeline, voice_file, text):
     return {"audio": base64.b64encode(payload).decode("ascii"), "words": words, "duration": elapsed}
 
 
-def main():
-    import torch
-    from huggingface_hub import hf_hub_download
-    from kokoro import KModel, KPipeline
+def main(prepare=False):
+    from cache import SpeechCache
+    from inference import MODEL_HASH, load_pipelines
 
+    pipelines, voice_files = load_pipelines(VOICES, MODEL_REVISION, prepare)
+    if prepare:
+        for name in ("af_heart", "bf_emma"):
+            list(pipelines[name[0]]("This is a synthetic timing check.", voice=voice_files[name], speed=1))
+        print("All eight voices and both English tokenizers prepared.")
+        return
     token = os.environ.get("KOKORO_TOKEN", "")
     if len(token) < 32:
         raise RuntimeError("KOKORO_TOKEN must contain at least 32 characters")
-    torch.set_num_threads(2)
-    def artifact(filename):
-        return hf_hub_download("hexgrad/Kokoro-82M", filename, revision=MODEL_REVISION, local_files_only=True)
-    model_file = artifact("kokoro-v1_0.pth")
-    if hashlib.sha256(Path(model_file).read_bytes()).hexdigest() != MODEL_HASH:
-        raise RuntimeError("Model checksum mismatch")
-    model = KModel(config=artifact("config.json"), model=model_file).eval()
-    pipeline = KPipeline(lang_code="a", model=model, repo_id="hexgrad/Kokoro-82M")
-    voice_file = artifact("voices/af_heart.pt")
+    cache = SpeechCache(os.environ.get("KOKORO_CACHE_DIR", "/cache"), f"v2:{MODEL_HASH}:{MODEL_REVISION}")
     busy = threading.Lock()
+    last_foreground = float("-inf")
 
     class Handler(BaseHTTPRequestHandler):
         def setup(self):
             super().setup()
             self.connection.settimeout(10)
 
-        def log_message(self, *_args):
+        def log_message(self, format, *args):
             pass  # Never log article text, credentials or request bodies.
 
-        def reply(self, status, value):
+        def reply(self, status, value, retry_after=1, cache_hit=None):
             body = json.dumps(value, separators=(",", ":")).encode()
             self.send_response(status)
             self.send_header("Content-Type", "application/json")
             self.send_header("Cache-Control", "no-store")
             self.send_header("Content-Length", str(len(body)))
             if status == 503:
-                self.send_header("Retry-After", "1")
+                self.send_header("Retry-After", str(retry_after))
+            if cache_hit is not None:
+                self.send_header("X-Speech-Cache", "hit" if cache_hit else "miss")
             self.end_headers()
             self.wfile.write(body)
 
@@ -103,10 +121,11 @@ def main():
             if not self.authorized():
                 return self.reply(401, {"error": "Unauthorized"})
             if self.path == "/voices":
-                return self.reply(200, [{"id": VOICE, "name": "Kokoro Heart · word highlighting", "language": "en-US"}])
+                return self.reply(200, [{"id": f"kokoro:{name}", "name": f"Kokoro {label} · word highlighting", "language": language} for name, (label, language) in VOICES.items()])
             self.reply(404, {"error": "Not found"})
 
         def do_POST(self):
+            nonlocal last_foreground
             self.close_connection = True
             if not self.authorized():
                 return self.reply(401, {"error": "Unauthorized"})
@@ -120,23 +139,51 @@ def main():
                     return self.reply(413, {"error": "Invalid body length"})
                 data = json.loads(self.rfile.read(size))
                 text = data.get("text") if isinstance(data, dict) else None
-                if not isinstance(text, str) or not text.strip() or len(text) > 2000 or data.get("voice") != VOICE:
+                # shortcut: Karakeep sends <=160 characters; benchmark RAM before allowing larger chunks.
+                if not isinstance(text, str) or not text.strip() or len(text) > 160:
                     return self.reply(400, {"error": "Invalid text or voice"})
+                selected_voice = voice_id(data.get("voice"))
             except (ValueError, OSError):
                 return self.reply(400, {"error": "Invalid request"})
-            if not busy.acquire(blocking=False):
+            background = self.headers.get("X-Speech-Priority") == "background"
+            if not background:
+                last_foreground = time.monotonic()
+            cached = cache.get(text, selected_voice)
+            if cached is not None:
+                return self.reply(200, cached, cache_hit=True)
+            if background and time.monotonic() - last_foreground < 30:
+                return self.reply(503, {"error": "Listening has priority"}, retry_after=30)
+            # A foreground listener waits for at most the current background chunk.
+            acquired = busy.acquire(blocking=False) if background else busy.acquire(timeout=45)
+            if not acquired:
                 return self.reply(503, {"error": "Busy"})
             try:
-                self.reply(200, synthesize(pipeline, voice_file, text))
+                cached = cache.get(text, selected_voice)
+                if cached is not None:
+                    return self.reply(200, cached, cache_hit=True)
+                result = synthesize(pipelines[selected_voice[0]], voice_files[selected_voice], text)
+                try:
+                    cache.put(text, selected_voice, result)
+                except OSError:
+                    if background:
+                        raise
+                    print("Speech cache write failed; serving uncached audio", file=sys.stderr, flush=True)
+                self.reply(200, result, cache_hit=False)
             except (BrokenPipeError, ConnectionResetError):
                 pass
-            except Exception:
+            except Exception as error:
+                location = traceback.extract_tb(error.__traceback__)[-1]
+                # Log code location, never exception messages that may contain article text.
+                print(f"Speech generation failed: {type(error).__name__} at {os.path.basename(location.filename)}:{location.lineno}", file=sys.stderr, flush=True)
                 self.reply(502, {"error": "Local speech generation failed"})
             finally:
+                if not background:
+                    last_foreground = time.monotonic()
                 busy.release()
 
-    ThreadingHTTPServer(("0.0.0.0", 4320), Handler).serve_forever()
+    # Docker deployments explicitly opt into their private interface; publish no ports.
+    ThreadingHTTPServer((os.environ.get("KOKORO_BIND", "127.0.0.1"), 4320), Handler).serve_forever()
 
 
 if __name__ == "__main__":
-    main()
+    main(prepare="--prepare" in sys.argv[1:])

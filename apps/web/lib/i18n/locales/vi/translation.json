@@ -1,6 +1,8 @@
 {
   "actions": {
     "save": "Lưu",
+    "save_to_library": "Lưu vào thư viện",
+    "saved_to_library": "Đã lưu vào thư viện",
     "manage_lists": "Quản lý danh sách",
     "edit": "Sửa",
     "unselect_all": "Bỏ chọn tất cả",
@@ -776,6 +778,7 @@
     "created_at": "Được tạo vào",
     "highlights": "Đánh dấu",
     "home": "Trang chủ",
+    "rss": "Nguồn tin",
     "bookmark_types": {
       "link": "Liên kết",
       "title": "Loại đánh dấu",
@@ -1072,6 +1075,7 @@
   "toasts": {
     "bookmarks": {
       "updated": "Đã cập nhật dấu trang!",
+      "saved_to_library": "Dấu trang đã được lưu vào thư viện của bạn!",
       "deleted": "Đã xóa dấu trang!",
       "refetch": "Đã xếp hàng tìm nạp lại!",
       "full_page_archive": "Đã kích hoạt tạo bản lưu trữ toàn trang",
@@ -1093,6 +1097,10 @@
       "updated": "Thẻ đã được cập nhật!",
       "failed_to_update": "Cập nhật thẻ thất bại"
     }
+  },
+  "feeds": {
+    "all_feeds": "Tất cả nguồn tin",
+    "manage_feeds": "Quản lý nguồn tin"
   },
   "preview": {
     "view_original": "Xem bản gốc",
@@ -1124,6 +1132,14 @@
     "no_bookmarks": {
       "title": "Chưa có dấu trang nào",
       "description": "Lưu các bài viết, liên kết và trang thú vị để truy cập nhanh sau này."
+    },
+    "no_subscriptions": {
+      "title": "Chưa có đăng kí RSS nào",
+      "description": "Đăng kí các nguồn tin và bài viết mới của chúng sẽ tự động xuất hiện ở đây."
+    },
+    "no_feed_articles": {
+      "title": "Chưa có bài viết nào từ nguồn tin của bạn",
+      "description": "Bài viết mới từ các đăng kí của bạn sẽ xuất hiện ở đây khi được tải về."
     }
   },
   "view_options": {

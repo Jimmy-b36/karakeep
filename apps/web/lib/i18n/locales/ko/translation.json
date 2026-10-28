@@ -8,6 +8,7 @@
     "video": "비디오",
     "archive": "보관",
     "home": "홈",
+    "rss": "피드",
     "bookmark_types": {
       "title": "북마크 유형",
       "link": "링크",
@@ -70,6 +71,8 @@
     "manage_lists": "목록 관리",
     "remove_from_list": "목록에서 제거",
     "save": "저장",
+    "save_to_library": "라이브러리에 저장",
+    "saved_to_library": "라이브러리에 저장됨",
     "add": "추가",
     "edit": "수정",
     "create": "생성",
@@ -280,6 +283,7 @@
   "toasts": {
     "bookmarks": {
       "updated": "북마크가 갱신 되었습니다!",
+      "saved_to_library": "북마크가 라이브러리에 저장되었습니다!",
       "deleted": "북마크가 삭제되었습니다!",
       "refetch": "다시 가져오기가 큐에 추가 되었습니다!",
       "full_page_archive": "전체 페이지 보관 생성이 요청되었습니다",
@@ -301,6 +305,10 @@
       "updated": "태그가 업데이트되었습니다!",
       "failed_to_update": "태그 업데이트 실패"
     }
+  },
+  "feeds": {
+    "all_feeds": "모든 피드",
+    "manage_feeds": "피드 관리"
   },
   "cleanups": {
     "cleanups": "정리",
@@ -1082,6 +1090,14 @@
     "no_bookmarks": {
       "title": "아직 북마크가 없습니다",
       "description": "나중에 빠르게 액세스할 수 있도록 흥미로운 기사, 링크 및 페이지를 저장하세요."
+    },
+    "no_subscriptions": {
+      "title": "아직 RSS 구독이 없습니다",
+      "description": "피드를 구독하면 새 글이 여기에 자동으로 표시됩니다."
+    },
+    "no_feed_articles": {
+      "title": "피드의 글이 아직 없습니다",
+      "description": "구독 중인 피드의 새 글은 가져와진 후 여기에 표시됩니다."
     }
   },
   "bookmark_editor": {

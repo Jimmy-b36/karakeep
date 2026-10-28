@@ -18,10 +18,12 @@ export default function UpdatableBookmarksGrid({
   query,
   bookmarks: initialBookmarks,
   showEditorCard = false,
+  emptyState,
 }: {
   query: Omit<ZGetBookmarksRequest, "sortOrder" | "includeContent">; // Sort order is handled by the store
   bookmarks: ZGetBookmarksResponse;
   showEditorCard?: boolean;
+  emptyState?: React.ReactNode;
   itemsPerPage?: number;
 }) {
   const api = useTRPC();
@@ -56,6 +58,7 @@ export default function UpdatableBookmarksGrid({
   const grid = (
     <BookmarksGrid
       bookmarks={data.pages.flatMap((b) => b.bookmarks)}
+      emptyState={emptyState}
       hasNextPage={hasNextPage}
       fetchNextPage={fetchNextPage}
       isFetchingNextPage={isFetchingNextPage}

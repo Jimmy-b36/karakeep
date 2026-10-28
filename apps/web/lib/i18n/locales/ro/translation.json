@@ -32,6 +32,7 @@
     "video": "Video",
     "archive": "Arhivă",
     "home": "Acasă",
+    "rss": "Fluxuri",
     "title": "Titlu",
     "description": "Descriere",
     "summary": "Rezumat",
@@ -89,6 +90,8 @@
     "manage_lists": "Gestionați listele",
     "remove_from_list": "Elimină din listă",
     "save": "Salvează",
+    "save_to_library": "Salvează în bibliotecă",
+    "saved_to_library": "Salvat în bibliotecă",
     "add": "Adaugă",
     "remove": "Elimină",
     "edit": "Editează",
@@ -1058,6 +1061,7 @@
       "update_banner": "Bannerul a fost actualizat!",
       "uploading_banner": "Se încarcă bannerul...",
       "updated": "Semnul de carte a fost actualizat!",
+      "saved_to_library": "Semnul de carte a fost salvat în biblioteca ta!",
       "deleted": "Semnul de carte a fost șters!",
       "refetch": "Recuperarea a fost pusă la coadă!",
       "full_page_archive": "Crearea arhivei complete a paginii a fost declanșată",
@@ -1076,6 +1080,10 @@
       "failed_to_update": "Actualizarea etichetei a eșuat"
     }
   },
+  "feeds": {
+    "all_feeds": "Toate fluxurile",
+    "manage_feeds": "Gestionează fluxurile"
+  },
   "dialogs": {
     "bookmarks": {
       "delete_confirmation_title": "Ștergeți semnul de carte?",
@@ -1087,6 +1095,14 @@
     "no_bookmarks": {
       "title": "Niciun semn de carte încă",
       "description": "Salvează articole, linkuri și pagini interesante pentru a le accesa rapid mai târziu."
+    },
+    "no_subscriptions": {
+      "title": "Niciun abonament RSS încă",
+      "description": "Abonează-te la fluxuri și noile lor articole vor apărea aici automat."
+    },
+    "no_feed_articles": {
+      "title": "Niciun articol din fluxurile tale încă",
+      "description": "Noile articole din abonamentele tale vor apărea aici când sunt preluate."
     }
   },
   "cleanups": {

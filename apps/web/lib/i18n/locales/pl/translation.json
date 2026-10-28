@@ -23,6 +23,7 @@
     "video": "Wideo",
     "archive": "Archiwum",
     "home": "Strona główna",
+    "rss": "Kanały",
     "bookmark_types": {
       "title": "Typ zakładki",
       "text": "Tekst",
@@ -68,6 +69,8 @@
     "bulk_edit": "Masowa edycja",
     "manage_lists": "Zarządzaj listami",
     "save": "Zapisz",
+    "save_to_library": "Zapisz do biblioteki",
+    "saved_to_library": "Zapisano w bibliotece",
     "add": "Dodaj",
     "edit": "Edytuj",
     "create": "Utwórz",
@@ -898,6 +901,7 @@
     },
     "bookmarks": {
       "updated": "Zakładka została zaktualizowana!",
+      "saved_to_library": "Zakładka została zapisana w twojej bibliotece!",
       "deleted": "Zakładka została usunięta!",
       "refetch": "Pobieranie ponownie zostało zaplanowane!",
       "full_page_archive": "Tworzenie pełnego archiwum strony zostało rozpoczęte",
@@ -913,6 +917,10 @@
       "updated": "Tag został zaktualizowany!",
       "failed_to_update": "Nie udało się zaktualizować tagu"
     }
+  },
+  "feeds": {
+    "all_feeds": "Wszystkie kanały",
+    "manage_feeds": "Zarządzaj kanałami"
   },
   "layouts": {
     "masonry": "Mozaika",
@@ -1114,6 +1122,14 @@
     "no_bookmarks": {
       "title": "Jeszcze nie ma zakładek",
       "description": "Zapisuj ciekawe artykuły, linki i strony, aby mieć do nich szybki dostęp później."
+    },
+    "no_subscriptions": {
+      "title": "Jeszcze nie ma subskrypcji RSS",
+      "description": "Subskrybuj kanały, a ich nowe artykuły pojawią się tutaj automatycznie."
+    },
+    "no_feed_articles": {
+      "title": "Jeszcze nie ma artykułów z twoich kanałów",
+      "description": "Nowe artykuły z twoich subskrypcji pojawią się tutaj po ich pobraniu."
     }
   },
   "bookmark_editor": {

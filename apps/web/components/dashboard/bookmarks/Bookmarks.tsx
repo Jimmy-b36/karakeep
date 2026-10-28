@@ -11,10 +11,12 @@ export default async function Bookmarks({
   query,
   header,
   showDivider,
+  emptyState,
   showEditorCard = false,
 }: {
   query: Omit<ZGetBookmarksRequest, "sortOrder" | "includeContent">; // Sort order is handled by the store
   header?: React.ReactNode;
+  emptyState?: React.ReactNode;
   showDivider?: boolean;
   showEditorCard?: boolean;
 }) {
@@ -35,6 +37,7 @@ export default async function Bookmarks({
         query={query}
         bookmarks={bookmarks}
         showEditorCard={showEditorCard}
+        emptyState={emptyState}
       />
     </div>
   );

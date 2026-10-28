@@ -30,6 +30,8 @@
     "close": "Luk",
     "edit_tags": "Rediger tags",
     "save": "Gem",
+    "save_to_library": "Gem i biblioteket",
+    "saved_to_library": "Gemt i biblioteket",
     "merge": "Sammenflet",
     "sort": {
       "title": "Sortér",
@@ -867,6 +869,7 @@
     "password": "Adganskode",
     "video": "Video",
     "home": "Hjem",
+    "rss": "Feeds",
     "bookmark_types": {
       "link": "Link",
       "text": "Tekst",
@@ -1016,6 +1019,7 @@
       "deleted": "Bogmærket er blevet slettet!",
       "clipboard_copied": "Linket er kopieret til din udklipsholder!",
       "updated": "Bogmærket er blevet opdateret!",
+      "saved_to_library": "Bogmærket er blevet gemt i dit bibliotek!",
       "preserve_pdf": "PDF-bevaring er blevet udløst",
       "update_banner": "Banneret er blevet opdateret!",
       "uploading_banner": "Uploader banner..."
@@ -1032,6 +1036,10 @@
       "updated": "Tag er blevet opdateret!",
       "failed_to_update": "Kunne ikke opdatere tag"
     }
+  },
+  "feeds": {
+    "all_feeds": "Alle feeds",
+    "manage_feeds": "Administrér feeds"
   },
   "cleanups": {
     "cleanups": "Oprydning",
@@ -1114,6 +1122,14 @@
     "no_bookmarks": {
       "title": "Ingen bogmærker endnu",
       "description": "Gem interessante artikler, links og sider for at få adgang til dem hurtigt senere."
+    },
+    "no_subscriptions": {
+      "title": "Ingen RSS-abonnementer endnu",
+      "description": "Abonnér på feeds, og deres nye artikler vises automatisk her."
+    },
+    "no_feed_articles": {
+      "title": "Ingen artikler fra dine feeds endnu",
+      "description": "Nye artikler fra dine abonnementer vises her, når de er hentet."
     }
   },
   "bookmark_editor": {

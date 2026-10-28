@@ -23,6 +23,7 @@
     "video": "Video",
     "archive": "Archiv",
     "home": "Startseite",
+    "rss": "Feeds",
     "highlights": "Textmarkierungen",
     "source": "Quelle",
     "bookmark_types": {
@@ -70,6 +71,8 @@
     "manage_lists": "Listen verwalten",
     "remove_from_list": "Aus Liste entfernen",
     "save": "Speichern",
+    "save_to_library": "In Bibliothek speichern",
+    "saved_to_library": "In Bibliothek gespeichert",
     "add": "Hinzufügen",
     "edit": "Bearbeiten",
     "create": "Erstellen",
@@ -1011,6 +1014,7 @@
   "toasts": {
     "bookmarks": {
       "updated": "Das Lesezeichen wurde aktualisiert!",
+      "saved_to_library": "Das Lesezeichen wurde in deiner Bibliothek gespeichert!",
       "deleted": "Das Lesezeichen wurde gelöscht!",
       "refetch": "Neuabruf wurde in die Warteschlange gestellt!",
       "full_page_archive": "Erstellung des vollständigen Seitenarchivs wurde ausgelöst",
@@ -1032,6 +1036,10 @@
       "updated": "Tag wurde aktualisiert!",
       "failed_to_update": "Fehler beim Aktualisieren des Tags"
     }
+  },
+  "feeds": {
+    "all_feeds": "Alle Feeds",
+    "manage_feeds": "Feeds verwalten"
   },
   "cleanups": {
     "cleanups": "Bereinigungen",
@@ -1124,6 +1132,14 @@
     "no_bookmarks": {
       "title": "Noch keine Lesezeichen",
       "description": "Speichere interessante Artikel, Links und Seiten, um später schnell darauf zugreifen zu können."
+    },
+    "no_subscriptions": {
+      "title": "Noch keine RSS-Abonnements",
+      "description": "Abonniere Feeds und ihre neuen Artikel erscheinen automatisch hier."
+    },
+    "no_feed_articles": {
+      "title": "Noch keine Artikel aus deinen Feeds",
+      "description": "Neue Artikel aus deinen Abonnements erscheinen hier, sobald sie abgerufen wurden."
     }
   },
   "view_options": {

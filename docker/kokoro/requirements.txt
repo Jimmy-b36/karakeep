@@ -10,6 +10,7 @@ charset-normalizer==3.5.2
 click==8.1.8
 cloudpathlib==0.26.0
 cloudpickle==3.1.2
+coloredlogs==15.0.1
 confection==0.1.5
 csvw==4.1.1
 curated-tokenizers==0.0.10
@@ -20,9 +21,11 @@ docopt==0.6.2
 en_core_web_sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl#sha256=1932429db727d4bff3deed6b34cfc05df17794f4a52eeb26cf8928f7c1a0fb85
 espeakng-loader==0.2.4
 filelock==3.32.3
+flatbuffers==25.12.19
 fsspec==2026.7.0
 hf-xet==1.7.0
 huggingface-hub==0.34.4
+humanfriendly==10.0
 idna==3.20
 isodate==0.7.2
 Jinja2==3.1.6
@@ -42,9 +45,11 @@ murmurhash==1.0.15
 networkx==3.6.1
 num2words==0.5.14
 numpy==2.2.6
+onnxruntime==1.23.2
 packaging==26.3
 phonemizer-fork==3.3.2
 preshed==3.0.13
+protobuf==7.36.2
 pydantic==2.14.1
 pydantic_core==2.50.1
 Pygments==2.21.0
@@ -73,7 +78,8 @@ sympy==1.14.0
 termcolor==3.3.0
 thinc==8.3.11
 tokenizers==0.21.4
-torch==2.8.0+cpu
+torch==2.8.0+cpu; platform_machine == "x86_64"
+torch==2.8.0; platform_machine == "aarch64"
 tqdm==4.70.1
 transformers==4.51.3
 typer==0.27.3
