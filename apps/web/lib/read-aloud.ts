@@ -332,10 +332,13 @@ export class ReadAloudPlayer {
   private readonly audio: AudioLike;
   private session = 0;
   private controller: AbortController | null = null;
-  private prefetched: {
-    start: number;
-    result: Promise<{ chunk: SpeechChunk } | { error: unknown }>;
-  } | null = null;
+  private prefetched = new Map<
+    number,
+    {
+      chunk?: SpeechChunk;
+      result: Promise<{ chunk: SpeechChunk } | { error: unknown }>;
+    }
+  >();
   private objectUrl: string | null = null;
   private version: string | null = null;
   private currentStart = 0;
@@ -457,7 +460,7 @@ export class ReadAloudPlayer {
     this.session++;
     this.controller?.abort();
     this.controller = null;
-    this.prefetched = null;
+    this.prefetched.clear();
     this.sessionActive = false;
     this.version = null;
     this.currentStart = 0;
@@ -507,12 +510,13 @@ export class ReadAloudPlayer {
     }
     this.emit({ status: "buffering", error: null });
     const start = this.currentStart;
-    const prefetched = this.prefetched;
-    this.prefetched = null;
+    const prefetched = this.prefetched.get(start);
     try {
       let chunk: SpeechChunk;
-      if (prefetched?.start === start) {
+      if (prefetched) {
         const result = await prefetched.result;
+        if (token !== this.session) return;
+        this.prefetched.delete(start);
         if ("error" in result) throw result.error;
         chunk = result.chunk;
       } else {
@@ -611,16 +615,33 @@ export class ReadAloudPlayer {
   }
 
   private prefetchNext(): void {
-    if (!this.sessionActive || this.nextOffset === null || this.prefetched)
-      return;
-    this.prefetched = {
-      start: this.nextOffset,
-      // A speculative failure is shown only when this audio is actually needed.
-      result: this.fetchAt(this.nextOffset).then(
-        (chunk) => ({ chunk }),
+    if (!this.sessionActive) return;
+    let start = this.nextOffset;
+    while (start !== null) {
+      const existing = this.prefetched.get(start);
+      if (!existing) break;
+      if (!existing.chunk) return;
+      start = existing.chunk.next;
+    }
+    if (start === null || this.prefetched.size >= 3) return;
+    const token = this.session;
+    const entry: {
+      chunk?: SpeechChunk;
+      result: Promise<{ chunk: SpeechChunk } | { error: unknown }>;
+    } = {
+      // Build a bounded runway sequentially to avoid overloading the worker.
+      result: this.fetchAt(start).then(
+        (chunk) => {
+          if (token === this.session && chunk.contentVersion === this.version) {
+            entry.chunk = chunk;
+            this.prefetchNext();
+          }
+          return { chunk };
+        },
         (error: unknown) => ({ error }),
       ),
     };
+    this.prefetched.set(start, entry);
   }
 
   private handleEnded(token: number): void {

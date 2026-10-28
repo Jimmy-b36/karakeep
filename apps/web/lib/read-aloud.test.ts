@@ -52,7 +52,7 @@ function createFakeAudio() {
 
 function setupPlayer() {
   const { audio, play } = createFakeAudio();
-  const fetchChunk = vi.fn();
+  const fetchChunk = vi.fn().mockResolvedValue(chunk(null, "v1"));
   let urlCounter = 0;
   const createObjectURL = vi.fn(() => `blob:${++urlCounter}`);
   const revokeObjectURL = vi.fn();
@@ -183,7 +183,7 @@ describe("ReadAloudPlayer", () => {
       vi.useRealTimers();
     }
   });
-  it("preloads exactly one segment while playing and reuses it at the boundary", async () => {
+  it("preloads multiple segments while playing and reuses them at the boundary", async () => {
     const { player, audio, fetchChunk, createObjectURL } = setupPlayer();
     fetchChunk
       .mockResolvedValueOnce(chunk(100, "v1", "0-100/300", "First"))
@@ -191,7 +191,7 @@ describe("ReadAloudPlayer", () => {
       .mockResolvedValueOnce(chunk(null, "v1", "200-300/300", "Third"));
     player.start();
     await flush();
-    expect(fetchChunk).toHaveBeenCalledTimes(2);
+    expect(fetchChunk).toHaveBeenCalledTimes(3);
     expect(player.currentSnapshot.currentText).toBe("First");
     expect(createObjectURL).toHaveBeenCalledTimes(1);
     audio.onended!(new Event("ended"));
@@ -201,6 +201,25 @@ describe("ReadAloudPlayer", () => {
     expect(fetchChunk.mock.calls.map(([request]) => request.start)).toEqual([
       0, 100, 200,
     ]);
+    player.stop();
+  });
+
+  it("bounds the runway to three upcoming segments and refills it during playback", async () => {
+    const { player, audio, fetchChunk } = setupPlayer();
+    fetchChunk.mockImplementation(async ({ start }: { start: number }) =>
+      chunk(start + 100, "v1"),
+    );
+    player.start();
+    await flush();
+    expect(fetchChunk.mock.calls.map(([request]) => request.start)).toEqual([
+      0, 100, 200, 300,
+    ]);
+    audio.onended!(new Event("ended"));
+    await flush();
+    expect(fetchChunk.mock.calls.map(([request]) => request.start)).toEqual([
+      0, 100, 200, 300, 400,
+    ]);
+    expect(player.currentSnapshot.status).toBe("playing");
     player.stop();
   });
 
