@@ -56,22 +56,56 @@ function setupPlayer() {
   let urlCounter = 0;
   const createObjectURL = vi.fn(() => `blob:${++urlCounter}`);
   const revokeObjectURL = vi.fn();
+  const onSnapshot = vi.fn();
   const player = new ReadAloudPlayer(
     {
       fetchChunk,
       createAudio: () => audio,
       createObjectURL,
       revokeObjectURL,
-      onSnapshot: vi.fn(),
+      onSnapshot,
     },
     "bookmark-1",
     "voice-a",
     1,
   );
-  return { player, audio, play, fetchChunk, createObjectURL, revokeObjectURL };
+  return {
+    player,
+    audio,
+    play,
+    fetchChunk,
+    createObjectURL,
+    revokeObjectURL,
+    onSnapshot,
+  };
 }
 
 describe("ReadAloudPlayer", () => {
+  it.each(["ended", "next", "paused"])(
+    "does not report buffering for a ready segment on %s",
+    async (transition) => {
+      const { player, audio, fetchChunk, onSnapshot } = setupPlayer();
+      fetchChunk
+        .mockResolvedValueOnce(chunk(100, "v1", "0-100/200", "First"))
+        .mockResolvedValueOnce(chunk(null, "v1", "100-200/200", "Second"));
+      player.start();
+      await flush();
+      if (transition === "paused") player.pause();
+      onSnapshot.mockClear();
+      if (transition === "ended") audio.onended!(new Event("ended"));
+      else player.nextChunk();
+      await flush();
+      expect(
+        onSnapshot.mock.calls.map(([snapshot]) => snapshot.status),
+      ).not.toContain("buffering");
+      expect(player.currentSnapshot).toMatchObject({
+        status: transition === "paused" ? "paused" : "playing",
+        currentText: "Second",
+      });
+      player.stop();
+    },
+  );
+
   it("skips forward using the existing prefetch and disables navigation at boundaries", async () => {
     const { player, fetchChunk, play } = setupPlayer();
     const pending = deferred<SpeechChunk>();

@@ -554,12 +554,16 @@ export class ReadAloudPlayer {
     if (token !== this.session || !this.sessionActive) {
       return;
     }
-    this.emit({ status: "buffering", error: null });
     const start = this.currentStart;
     const prefetched = this.prefetched.get(start);
+    // Ready audio is a handoff, not a generation wait.
+    if (!prefetched?.chunk) this.emit({ status: "buffering", error: null });
     try {
       let chunk: SpeechChunk;
-      if (prefetched) {
+      if (prefetched?.chunk) {
+        chunk = prefetched.chunk;
+        this.prefetched.delete(start);
+      } else if (prefetched) {
         const result = await prefetched.result;
         if (token !== this.session) return;
         this.prefetched.delete(start);
