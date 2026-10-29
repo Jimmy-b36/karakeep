@@ -1,6 +1,11 @@
 import createStretch from "signalsmith-stretch";
 import type { AudioLike } from "./read-aloud";
 
+// Emscripten serializes its factory with Function#toString. Next/Turbopack
+// rewrites process references into outer imports, which do not exist in the
+// worklet realm. Load the pinned, patched standalone distribution unchanged.
+createStretch.moduleUrl = "/audio/signalsmith-stretch-1.3.2.js";
+
 export interface StretchNode extends AudioNode {
   addBuffers(buffers: Float32Array[]): Promise<number>;
   dropBuffers(before?: number): Promise<unknown>;
@@ -38,7 +43,9 @@ export class ScheduledSpeechAudio implements AudioLike {
   onerror: ((event: Event) => void) | null = null;
   private context: AudioContext | null = null;
   private node: StretchNode | null = null;
-  private ready: Promise<StretchNode> | null = null;
+  private ready: Promise<StretchNode | null> | null = null;
+  private fallback: HTMLAudioElement | null = null;
+  private fallbackUrl: string | null = null;
   private pending: Promise<void> = Promise.resolve();
   private segments: Segment[] = [];
   private clocks: Clock[] = [];
@@ -82,23 +89,51 @@ export class ScheduledSpeechAudio implements AudioLike {
     return this.context.decodeAudioData(await blob.arrayBuffer());
   }
 
-  private ensureNode(): Promise<StretchNode> {
+  private ensureNode(): Promise<StretchNode | null> {
+    if (this.fallback) return Promise.resolve(null);
     if (!this.ready) {
       this.context ??= this.createContext();
       const epoch = this.epoch;
-      this.ready = this.createNode(this.context).then(async (node) => {
-        const latency = await node.latency();
-        if (epoch !== this.epoch) {
-          node.disconnect();
-          throw new Error("Cancelled audio session");
-        }
-        node.addEventListener?.("processorerror", () => {
-          if (epoch === this.epoch) this.onerror?.(new Event("error"));
-        });
-        this.node = node;
-        this.latency = latency + 256 / this.context!.sampleRate;
-        return node;
-      });
+      let timeout: ReturnType<typeof setTimeout>;
+      const creation = this.createNode(this.context);
+      this.ready = Promise.race([
+        creation.then(async (node) => ({
+          node,
+          latency: await node.latency(),
+        })),
+        new Promise<never>((_, reject) => {
+          timeout = setTimeout(() => {
+            void creation.then(
+              (node) => node.disconnect(),
+              () => undefined,
+            );
+            reject(new Error("Audio worklet initialization timed out"));
+          }, 5000);
+        }),
+      ])
+        .then(({ node, latency }) => {
+          if (epoch !== this.epoch) {
+            node.disconnect();
+            throw new Error("Cancelled audio session");
+          }
+          node.addEventListener?.("processorerror", () => {
+            if (epoch === this.epoch) this.onerror?.(new Event("error"));
+          });
+          this.node = node;
+          this.latency = latency + 256 / this.context!.sampleRate;
+          return node;
+        })
+        .catch((error: unknown) => {
+          if (epoch !== this.epoch) throw error;
+          console.warn(
+            "Read-aloud worklet unavailable; using native audio",
+            error,
+          );
+          this.fallback = new Audio();
+          this.fallback.preservesPitch = true;
+          return null;
+        })
+        .finally(() => clearTimeout(timeout));
     }
     return this.ready;
   }
@@ -125,7 +160,7 @@ export class ScheduledSpeechAudio implements AudioLike {
     this.pending = this.pending.then(async () => {
       if (epoch !== this.epoch) return;
       const node = await this.ensureNode();
-      if (epoch !== this.epoch) return;
+      if (epoch !== this.epoch || !node) return;
       const sr = this.context!.sampleRate;
       // Round cumulative boundaries, not each chunk length independently: the
       // latter inserts/drops a sample at every non-integral resampling boundary.
@@ -163,7 +198,10 @@ export class ScheduledSpeechAudio implements AudioLike {
   }
   set playbackRate(value: number) {
     if (!Number.isFinite(value) || value <= 0 || value === this.rate) return;
-    if (this.running) {
+    if (this.fallback) {
+      this.rate = value;
+      this.fallback.playbackRate = value;
+    } else if (this.running) {
       const now = this.context!.currentTime;
       // A newer command replaces unrendered future changes in the worklet.
       this.clocks = this.clocks.filter((clock) => clock.output <= now);
@@ -197,6 +235,7 @@ export class ScheduledSpeechAudio implements AudioLike {
   }
 
   get currentTime(): number {
+    if (this.fallback) return this.fallback.currentTime;
     this.sync();
     return Math.max(
       0,
@@ -218,10 +257,16 @@ export class ScheduledSpeechAudio implements AudioLike {
       !this.segments.length
     )
       return;
+    if (this.fallback) {
+      if (!this.fallbackUrl) this.loadFallback();
+      await this.fallback.play();
+      if (epoch === this.epoch && token === this.playToken) this.running = true;
+      return;
+    }
     if (this.context.state !== "running")
       throw new Error("Audio context is suspended");
     const node = await this.ensureNode();
-    if (epoch !== this.epoch || token !== this.playToken) return;
+    if (epoch !== this.epoch || token !== this.playToken || !node) return;
     const output = this.context.currentTime + this.latency;
     this.clocks = [{ output, input: this.position, rate: this.rate }];
     node.connect(this.context.destination);
@@ -238,8 +283,69 @@ export class ScheduledSpeechAudio implements AudioLike {
     this.timer = setInterval(() => this.sync(), 25);
   }
 
+  private loadFallback(): void {
+    const media = this.fallback!;
+    if (this.fallbackUrl) URL.revokeObjectURL(this.fallbackUrl);
+    const segment = this.segments[0];
+    if (!segment) return;
+    const buffer = segment.buffer;
+    const count = buffer.getChannelData(0).length;
+    // Native media accepts a self-contained PCM WAV, with no extra decoder or CDN.
+    const wav = new ArrayBuffer(44 + count * 2);
+    const view = new DataView(wav);
+    const text = (offset: number, value: string) => {
+      for (let i = 0; i < value.length; i++)
+        view.setUint8(offset + i, value.charCodeAt(i));
+    };
+    text(0, "RIFF");
+    view.setUint32(4, wav.byteLength - 8, true);
+    text(8, "WAVEfmt ");
+    view.setUint32(16, 16, true);
+    view.setUint16(20, 1, true);
+    view.setUint16(22, 1, true);
+    view.setUint32(24, buffer.sampleRate, true);
+    view.setUint32(28, buffer.sampleRate * 2, true);
+    view.setUint16(32, 2, true);
+    view.setUint16(34, 16, true);
+    text(36, "data");
+    view.setUint32(40, count * 2, true);
+    for (let i = 0; i < count; i++) {
+      let sample = 0;
+      for (let c = 0; c < buffer.numberOfChannels; c++)
+        sample += buffer.getChannelData(c)[i] / buffer.numberOfChannels;
+      view.setInt16(
+        44 + i * 2,
+        Math.max(-1, Math.min(1, sample)) * 32767,
+        true,
+      );
+    }
+    media.src = this.fallbackUrl = URL.createObjectURL(
+      new Blob([wav], { type: "audio/wav" }),
+    );
+    media.playbackRate = this.rate;
+    const epoch = this.epoch;
+    media.onerror = () => {
+      if (epoch === this.epoch) this.onerror?.(new Event("error"));
+    };
+    media.onended = () => {
+      if (epoch !== this.epoch) return;
+      this.segments.shift();
+      if (!this.segments.length) {
+        this.running = false;
+        this.onended?.(new Event("ended"));
+        return;
+      }
+      this.loadFallback();
+      this.segments[0].onStart?.();
+      if (epoch === this.epoch && this.running)
+        void media.play().catch(() => {
+          if (epoch === this.epoch) this.onerror?.(new Event("error"));
+        });
+    };
+  }
+
   private sync(): void {
-    if (!this.running || !this.context) return;
+    if (!this.running || !this.context || this.fallback) return;
     const position = this.sourceTime();
     const epoch = this.epoch;
     while (this.segments.length && position >= this.segments[0].to) {
@@ -279,6 +385,7 @@ export class ScheduledSpeechAudio implements AudioLike {
 
   pause(): void {
     this.playToken++;
+    this.fallback?.pause();
     this.sync();
     if (this.running) this.position = this.sourceTime();
     this.running = false;
@@ -295,6 +402,13 @@ export class ScheduledSpeechAudio implements AudioLike {
     this.running = false; // navigation must not dispatch stale chunk callbacks
     this.pause();
     this.epoch++;
+    if (this.fallback) {
+      this.fallback.onended = this.fallback.onerror = null;
+      this.fallback.removeAttribute("src");
+      this.fallback.load();
+    }
+    if (this.fallbackUrl) URL.revokeObjectURL(this.fallbackUrl);
+    this.fallbackUrl = null;
     if (this.node) void this.node.dropBuffers();
     this.node = null;
     this.ready = null;

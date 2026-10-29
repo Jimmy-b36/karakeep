@@ -24,6 +24,7 @@
     "**/*.config.js",
     "**/*.config.cjs",
     "**/.eslintrc.cjs",
-    "next-env.d.ts"
+    "next-env.d.ts",
+    "public/audio/signalsmith-stretch-1.3.2.js"
   ]
 }

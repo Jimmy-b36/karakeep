@@ -34,6 +34,7 @@
     "*.md",
     "*.json",
     "**/migrations/**",
+    "apps/web/public/audio/signalsmith-stretch-1.3.2.js",
     "packages/open-api/karakeep-openapi-spec.json",
     "package-lock.json",
     "yarn.lock"

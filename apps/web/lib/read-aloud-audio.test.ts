@@ -50,6 +50,102 @@ function harness() {
 const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 describe("continuous pitch-preserving scheduled audio", () => {
+  it("falls back to HTMLAudio when worklet initialization rejects, retaining queue and cleanup", async () => {
+    const { context } = harness();
+    const media = {
+      src: "",
+      currentTime: 0,
+      playbackRate: 1,
+      preservesPitch: false,
+      play: vi.fn(async () => undefined),
+      pause: vi.fn(),
+      onended: null as null | (() => void),
+      onerror: null,
+      removeAttribute: vi.fn(),
+      load: vi.fn(),
+    };
+    vi.stubGlobal(
+      "Audio",
+      vi.fn(function () {
+        return media;
+      }),
+    );
+    const revoke = vi.spyOn(URL, "revokeObjectURL");
+    const audio = new ScheduledSpeechAudio(
+      () => context as unknown as AudioContext,
+      async () => {
+        throw new Error("worklet unavailable");
+      },
+    );
+    const next = vi.fn(),
+      ended = vi.fn();
+    audio.onended = ended;
+    audio.playbackRate = 1.5;
+    audio.setBuffer(buffer());
+    audio.enqueue(buffer(1), next);
+    await audio.play();
+    expect(media.play).toHaveBeenCalledOnce();
+    expect(media.src).toMatch(/^blob:/);
+    expect(media.preservesPitch).toBe(true);
+    expect(media.playbackRate).toBe(1.5);
+    media.currentTime = 0.7;
+    expect(audio.currentTime).toBe(0.7);
+    audio.pause();
+    await audio.play();
+    media.onended!();
+    expect(next).toHaveBeenCalledOnce();
+    media.onended!();
+    expect(ended).toHaveBeenCalledOnce();
+    audio.dispose();
+    expect(media.pause).toHaveBeenCalled();
+    expect(revoke).toHaveBeenCalled();
+    vi.unstubAllGlobals();
+    revoke.mockRestore();
+  });
+  it("bounds a hung worklet startup and disconnects a late result after native fallback", async () => {
+    vi.useFakeTimers();
+    const { context, nodes, createNode } = harness();
+    const media = {
+      src: "",
+      currentTime: 0,
+      play: vi.fn(async () => undefined),
+      pause: vi.fn(),
+      removeAttribute: vi.fn(),
+      load: vi.fn(),
+    };
+    vi.stubGlobal(
+      "Audio",
+      vi.fn(function () {
+        return media;
+      }),
+    );
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    let resolve!: (node: StretchNode) => void;
+    const audio = new ScheduledSpeechAudio(
+      () => context as unknown as AudioContext,
+      () =>
+        new Promise((r) => {
+          resolve = r;
+        }),
+    );
+    try {
+      audio.setBuffer(buffer());
+      const playing = audio.play();
+      await vi.advanceTimersByTimeAsync(5000);
+      await playing;
+      expect(media.play).toHaveBeenCalledOnce();
+      resolve(await createNode());
+      await vi.advanceTimersByTimeAsync(0);
+      expect(nodes[0].disconnect).toHaveBeenCalledOnce();
+      expect(nodes[0].connect).not.toHaveBeenCalled();
+    } finally {
+      audio.dispose();
+      warn.mockRestore();
+      vi.unstubAllGlobals();
+      vi.useRealTimers();
+    }
+  });
+
   it("queues consecutive buffers into ONE worklet, without per-chunk source swaps", async () => {
     const { audio, nodes, createNode, context } = harness();
     audio.setBuffer(buffer());

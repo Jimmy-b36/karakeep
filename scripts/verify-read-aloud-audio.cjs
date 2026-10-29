@@ -14,19 +14,82 @@ const { build } = require("esbuild");
     path.join(process.env.TMPDIR || os.tmpdir(), "read-aloud-pcm-"),
   );
   let browser, server;
+  const deadline = setTimeout(() => {
+    console.error(
+      "FAIL: audio verification exceeded 30 seconds (possible silent worklet startup hang)",
+    );
+    void browser?.close();
+  }, 30000);
   try {
-    await build({
-      entryPoints: [
-        path.resolve(__dirname, "../apps/web/lib/read-aloud-audio.ts"),
-      ],
-      outfile: path.join(dir, "audio.js"),
-      bundle: true,
-      minify: true,
-      format: "iife",
-      globalName: "Speech",
-    });
+    assert.equal(
+      await fs.readFile(
+        path.resolve(
+          __dirname,
+          "../apps/web/public/audio/signalsmith-stretch-1.3.2.js",
+        ),
+        "utf8",
+      ),
+      await fs.readFile(require.resolve("signalsmith-stretch"), "utf8"),
+      "Standalone worklet must match the installed, patched dependency; regenerate after upgrades",
+    );
+    if (process.argv.includes("--production")) {
+      const chunks = path.resolve(__dirname, "../apps/web/.next/static/chunks");
+      let artifact;
+      for (const file of await fs.readdir(chunks)) {
+        if (!file.endsWith(".js")) continue;
+        const text = await fs.readFile(path.join(chunks, file), "utf8");
+        if (
+          text.includes("Cancelled audio session") &&
+          text.includes("signalsmith-stretch")
+        ) {
+          artifact = { file, text };
+          break;
+        }
+      }
+      assert(artifact, "Build the actual Next production app first");
+      // Execute the emitted adapter/dependency verbatim, not an esbuild proxy.
+      const start = artifact.text.indexOf("let G={}");
+      const match = /class (\w+)\{createContext;createNode;/.exec(
+        artifact.text,
+      );
+      assert(
+        start >= 0 && match,
+        "Production adapter layout changed; update extractor",
+      );
+      const end = artifact.text.indexOf(
+        "function ",
+        artifact.text.indexOf("dispose(){", match.index),
+      );
+      await fs.writeFile(
+        path.join(dir, "audio.js"),
+        `${artifact.text.slice(start, end)};globalThis.Speech={ScheduledSpeechAudio:${match[1]}};`,
+      );
+      console.log("Actual Next/Turbopack artifact:", artifact.file);
+    } else
+      await build({
+        entryPoints: [
+          path.resolve(__dirname, "../apps/web/lib/read-aloud-audio.ts"),
+        ],
+        outfile: path.join(dir, "audio.js"),
+        bundle: true,
+        minify: true,
+        format: "iife",
+        globalName: "Speech",
+      });
     server = http
       .createServer(async (req, res) => {
+        if (req.url === "/audio/signalsmith-stretch-1.3.2.js") {
+          res.setHeader("Content-Type", "text/javascript");
+          res.end(
+            await fs.readFile(
+              path.resolve(
+                __dirname,
+                "../apps/web/public/audio/signalsmith-stretch-1.3.2.js",
+              ),
+            ),
+          );
+          return;
+        }
         res.setHeader(
           "Content-Type",
           req.url === "/audio.js" ? "text/javascript" : "text/html",
@@ -46,7 +109,14 @@ const { build } = require("esbuild");
     }
     const page = await browser.newPage();
     const errors = [];
-    page.on("pageerror", (e) => errors.push(e.message));
+    page.on("pageerror", (e) => {
+      errors.push(e.message);
+      console.error("Browser exception:", e.message);
+    });
+    page.on("console", (m) => {
+      if (m.type() === "error") console.error("Browser console:", m.text());
+    });
+    page.setDefaultTimeout(15000);
     await page.goto(`http://127.0.0.1:${server.address().port}`);
     const results = await page.evaluate(async () => {
       function sine(ctx, sr, from, to) {
@@ -251,11 +321,79 @@ const { build } = require("esbuild");
     assert.equal(live.boundaries, live.old);
     assert.ok(live.restarted >= 0 && live.restarted < 0.3);
     assert.deepEqual(live.failures, []);
+    await page.evaluate(() => {
+      document.querySelector("#start").onclick = () => {
+        window.nativeTest = (async () => {
+          const ctx = new AudioContext();
+          const audio = new Speech.ScheduledSpeechAudio(
+            () => ctx,
+            async () => {
+              throw new Error("Regression: worklet unavailable");
+            },
+          );
+          audio.unlock();
+          const buffer = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
+          const samples = buffer.getChannelData(0);
+          for (let i = 0; i < samples.length; i++)
+            samples[i] =
+              0.4 * Math.sin((2 * Math.PI * 440 * i) / ctx.sampleRate);
+          audio.setBuffer(buffer);
+          let boundaries = 0,
+            ended = 0;
+          audio.enqueue(buffer, () => boundaries++);
+          audio.onended = () => ended++;
+          await audio.play();
+          // Inspect genuine HTMLMediaElement PCM, not merely its ticking clock.
+          const media = audio.fallback;
+          const source = ctx.createMediaElementSource(media);
+          const analyser = ctx.createAnalyser();
+          source.connect(analyser);
+          analyser.connect(ctx.destination);
+          await new Promise((r) => setTimeout(r, 250));
+          const pcm = new Float32Array(analyser.fftSize);
+          analyser.getFloatTimeDomainData(pcm);
+          const rms = Math.sqrt(
+            pcm.reduce((sum, x) => sum + x * x, 0) / pcm.length,
+          );
+          audio.pause();
+          const paused = audio.currentTime;
+          await new Promise((r) => setTimeout(r, 100));
+          const frozen = audio.currentTime;
+          audio.playbackRate = 2;
+          await audio.play();
+          await new Promise((r) => setTimeout(r, 1100));
+          const result = {
+            rms,
+            paused,
+            frozen,
+            boundaries,
+            ended,
+            pitch: media.preservesPitch,
+          };
+          audio.removeAttribute("src");
+          audio.setBuffer(buffer);
+          await audio.play();
+          audio.dispose();
+          source.disconnect();
+          analyser.disconnect();
+          return result;
+        })();
+      };
+    });
+    await page.click("#start");
+    const native = await page.evaluate(() => window.nativeTest);
+    console.log("Native fallback PCM/lifecycle:", native);
+    assert.ok(native.rms > 0.1, "Native fallback must output nonzero PCM");
+    assert.equal(native.paused, native.frozen);
+    assert.equal(native.boundaries, 1);
+    assert.equal(native.ended, 1);
+    assert.equal(native.pitch, true);
     assert.deepEqual(errors, []);
     console.log(
       "PASS: real PCM pitch/duration, sample-identical chunk boundaries, resampling, trusted-click playback, speed/pause/resume/navigation",
     );
   } finally {
+    clearTimeout(deadline);
     await browser?.close();
     server?.close();
     await fs.rm(dir, { recursive: true, force: true });
