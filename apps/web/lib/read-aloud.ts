@@ -296,6 +296,12 @@ export interface ReadAloudSnapshot {
 }
 
 export interface AudioLike {
+  // Optional PCM scheduler; HTMLAudioElement is the compatibility fallback.
+  unlock?(): void;
+  prepare?(blob: Blob): Promise<AudioBuffer>;
+  setBuffer?(buffer: AudioBuffer): void;
+  enqueue?(buffer: AudioBuffer, onStart: () => void): void;
+  dispose?(): void;
   playbackRate: number;
   currentTime?: number;
   src: string;
@@ -338,10 +344,12 @@ export class ReadAloudPlayer {
     number,
     {
       chunk?: SpeechChunk;
+      scheduledToken?: number;
       result: Promise<{ chunk: SpeechChunk } | { error: unknown }>;
     }
   >();
   private objectUrl: string | null = null;
+  private decoded = new WeakMap<SpeechChunk, AudioBuffer>();
   private version: string | null = null;
   private currentStart = 0;
   private previousStarts: number[] = [];
@@ -397,6 +405,7 @@ export class ReadAloudPlayer {
 
   startAt(offset: number): void {
     if (!Number.isSafeInteger(offset) || offset < 0) return;
+    this.unlock();
     this.resetSession();
     this.sessionActive = true;
     this.currentStart = offset;
@@ -440,6 +449,7 @@ export class ReadAloudPlayer {
   }
 
   resume(): void {
+    this.unlock();
     if (!this.sessionActive) {
       this.start();
       return;
@@ -453,6 +463,7 @@ export class ReadAloudPlayer {
   }
 
   retry(): void {
+    this.unlock();
     if (!this.sessionActive) {
       this.start();
       return;
@@ -491,6 +502,11 @@ export class ReadAloudPlayer {
   dispose(): void {
     this.disposed = true;
     this.resetSession();
+    this.audio.dispose?.();
+  }
+
+  unlock(): void {
+    this.audio.unlock?.();
   }
 
   private resetSession(): void {
@@ -510,7 +526,7 @@ export class ReadAloudPlayer {
 
   private clearAudio(): void {
     if (this.objectUrl) {
-      this.deps.revokeObjectURL(this.objectUrl);
+      if (!this.audio.prepare) this.deps.revokeObjectURL(this.objectUrl);
       this.objectUrl = null;
     }
     this.words = [];
@@ -543,6 +559,7 @@ export class ReadAloudPlayer {
   }
 
   private fail(error: ReadAloudErrorInfo): void {
+    this.audio.pause();
     this.controller?.abort();
     this.controller = null;
     this.currentText = null;
@@ -588,10 +605,18 @@ export class ReadAloudPlayer {
       this.version = chunk.contentVersion;
       this.nextOffset = chunk.next;
 
-      this.objectUrl = this.deps.createObjectURL(chunk.blob);
+      if (this.audio.prepare) {
+        const buffer =
+          this.decoded.get(chunk) ?? (await this.prepareChunk(chunk));
+        if (token !== this.session) return;
+        this.audio.setBuffer!(buffer);
+        this.objectUrl = "scheduled-pcm";
+      } else {
+        this.objectUrl = this.deps.createObjectURL(chunk.blob);
+        this.audio.src = this.objectUrl;
+      }
       this.audio.onended = () => this.handleEnded(token);
       this.audio.onerror = () => this.handleAudioError(token);
-      this.audio.src = this.objectUrl;
       this.audio.playbackRate = this.speed;
       this.loadedText = chunk.text ?? null;
       this.words = chunk.words ?? [];
@@ -599,6 +624,7 @@ export class ReadAloudPlayer {
       if (this.paused) {
         this.currentText = this.loadedText;
         this.emit({ status: "paused", error: null });
+        this.prefetchNext();
         return;
       }
 
@@ -621,6 +647,7 @@ export class ReadAloudPlayer {
       this.currentText = this.loadedText;
       this.emit({ status: this.paused ? "paused" : "playing", error: null });
       this.updateProgress();
+      this.schedulePrefetched();
       this.prefetchNext();
     } catch (error) {
       if (token !== this.session) {
@@ -688,16 +715,25 @@ export class ReadAloudPlayer {
     if (start === null || this.prefetched.size >= 3) return;
     const entry: {
       chunk?: SpeechChunk;
+      scheduledToken?: number;
       result: Promise<{ chunk: SpeechChunk } | { error: unknown }>;
     } = {
       // Build a bounded runway sequentially to avoid overloading the worker.
       result: this.fetchAt(start).then(
-        (chunk) => {
+        async (chunk) => {
+          if (this.audio.prepare && chunk.contentVersion === this.version) {
+            try {
+              await this.prepareChunk(chunk);
+            } catch (error) {
+              return { error };
+            }
+          }
           if (
             this.prefetched.get(start) === entry &&
             chunk.contentVersion === this.version
           ) {
             entry.chunk = chunk;
+            this.schedulePrefetched();
             this.prefetchNext();
           }
           return { chunk };
@@ -706,6 +742,50 @@ export class ReadAloudPlayer {
       ),
     };
     this.prefetched.set(start, entry);
+  }
+
+  private async prepareChunk(chunk: SpeechChunk): Promise<AudioBuffer> {
+    try {
+      const buffer = await this.audio.prepare!(chunk.blob);
+      this.decoded.set(chunk, buffer);
+      return buffer;
+    } catch {
+      throw new ReadAloudError(PLAYBACK_ERROR);
+    }
+  }
+
+  private schedulePrefetched(): void {
+    if (!this.audio.enqueue || !this.objectUrl || !this.sessionActive) return;
+    const token = this.session;
+    let start = this.nextOffset;
+    const visited = new Set<number>();
+    while (start !== null && !visited.has(start)) {
+      visited.add(start);
+      const offset = start;
+      const entry = this.prefetched.get(offset);
+      const chunk = entry?.chunk;
+      const buffer = chunk && this.decoded.get(chunk);
+      if (!entry || !chunk || !buffer) return;
+      if (entry.scheduledToken !== token) {
+        entry.scheduledToken = token;
+        this.audio.enqueue(buffer, () => {
+          if (token !== this.session || !this.sessionActive) return;
+          this.previousStarts.push(this.currentStart);
+          this.currentStart = offset;
+          this.nextOffset = chunk.next;
+          this.prefetched.delete(offset);
+          this.loadedText = this.currentText = chunk.text ?? null;
+          this.words = chunk.words ?? [];
+          this.currentWord = null;
+          this.emit({
+            status: this.paused ? "paused" : "playing",
+            error: null,
+          });
+          this.prefetchNext();
+        });
+      }
+      start = chunk.next;
+    }
   }
 
   private handleEnded(token: number): void {
@@ -750,6 +830,7 @@ export class ReadAloudPlayer {
     this.currentText = this.loadedText;
     this.emit({ status: this.paused ? "paused" : "playing", error: null });
     this.updateProgress();
+    this.schedulePrefetched();
     this.prefetchNext();
   }
 }

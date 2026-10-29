@@ -36,6 +36,9 @@ patchedDependencies:
   # Detach service worker targets that Chrome reports without a browserContextId
   # instead of failing an assertion that crashes connectOverCDP().
   patchright-core@1.59.4: patches/patchright-core@1.59.4.patch
+  # Fix streaming buffer traversal (advance read cursor and absolute buffer end).
+  # Regression: scripts/verify-read-aloud-audio.cjs compares split vs whole PCM.
+  signalsmith-stretch@1.3.2: patches/signalsmith-stretch@1.3.2.patch
 
 # Docker builds can prune packages that use one of the root patches.
 allowUnusedPatches: true

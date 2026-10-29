@@ -24,6 +24,7 @@ patchedDependencies:
   patchright-core@1.59.4: bad8f4246d462dedf01a4188e8d958032e1d8f1fcf243b33b1ecafe7ca41a1bd
   react-native@0.86.3: 7d74c7fbd33e9f3f3f8a8ba47a013acfc098948e39c7faab1232e6edca358ac1
   react-tweet@3.2.2: d7b79c3ae412d8e700a8c176df42ee89112c9bdc91d2aad0ebb7d5b011b49993
+  signalsmith-stretch@1.3.2: 32810c0c2f5c110579ed09b7676fb245b3a5dda3de85da2cddfaeb2a66142ab2
   xcode@3.0.1: 725863c0591d89ca053226c49fe7bc321f320391ec5f78b6c2e8e41ab1868805
 
 importers:
@@ -836,6 +837,9 @@ importers:
       shiki:
         specifier: ^4.1.0
         version: 4.1.0
+      signalsmith-stretch:
+        specifier: 1.3.2
+        version: 1.3.2(patch_hash=32810c0c2f5c110579ed09b7676fb245b3a5dda3de85da2cddfaeb2a66142ab2)
       sonner:
         specifier: ^2.0.7
         version: 2.0.7(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
@@ -15305,6 +15309,9 @@ packages:
   signal-exit@4.1.0:
     resolution: {integrity: sha512-bzyZ1e88w9O1iNJbKnOlvYTrWPDl46O1bG0D3XInv+9tkPrxrN8jUUTiFlDkkmKWgn1M6CfIA13SuGqOa9Korw==}
     engines: {node: '>=14'}
+
+  signalsmith-stretch@1.3.2:
+    resolution: {integrity: sha512-tJqRbwPCoWLSHXwO29UQ75u72IwPsHns3RG+TKzuOAp7OduJiJMzEtz32JEFbPFQcTR7aiKCIVc+/Kzw8bMZUw==}
 
   simple-plist@1.3.1:
     resolution: {integrity: sha512-iMSw5i0XseMnrhtIzRb7XpQEXepa9xhWxGUojHBL43SIpQuDQkh3Wpy67ZbDzZVr6EKxvwVChnVpdl8hEVLDiw==}
@@ -33317,6 +33324,8 @@ snapshots:
   signal-exit@3.0.7: {}
 
   signal-exit@4.1.0: {}
+
+  signalsmith-stretch@1.3.2(patch_hash=32810c0c2f5c110579ed09b7676fb245b3a5dda3de85da2cddfaeb2a66142ab2): {}
 
   simple-plist@1.3.1:
     dependencies:

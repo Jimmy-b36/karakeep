@@ -1,0 +1,28 @@
+diff --git a/SignalsmithStretch.js b/SignalsmithStretch.js
+index 7b39b2ae500c8563500c20a4f951878e309d845f..3c7a6d983a990678a3f50fb6e2d575b26a5d0902 100644
+--- a/SignalsmithStretch.js
++++ b/SignalsmithStretch.js
+@@ -318,7 +318,8 @@ function registerWorkletProcessor(Module, audioNodeKey) {
+ 							let channelBuffer = audioBuffer[c%audioBuffer.length];
+ 							buffer.subarray(blockSamples).set(channelBuffer.subarray(startIndex, startIndex + count));
+ 						});
+-						audioSamples += count;
++						inputSamples += count;
++						audioSamples = bufferEnd;
+ 						blockSamples += count;
+ 					} else { // we're already past this buffer - skip it
+ 						audioSamples += audioBuffer[0].length;
+diff --git a/SignalsmithStretch.mjs b/SignalsmithStretch.mjs
+index 7d5cae72e77a84143ed91ba12fc91b806dc4d9d1..5b23e222566d81055075d7e84ed260f9bc4957cd 100644
+--- a/SignalsmithStretch.mjs
++++ b/SignalsmithStretch.mjs
+@@ -319,7 +319,8 @@ function registerWorkletProcessor(Module, audioNodeKey) {
+ 							let channelBuffer = audioBuffer[c%audioBuffer.length];
+ 							buffer.subarray(blockSamples).set(channelBuffer.subarray(startIndex, startIndex + count));
+ 						});
+-						audioSamples += count;
++						inputSamples += count;
++						audioSamples = bufferEnd;
+ 						blockSamples += count;
+ 					} else { // we're already past this buffer - skip it
+ 						audioSamples += audioBuffer[0].length;

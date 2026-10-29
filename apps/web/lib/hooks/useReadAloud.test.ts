@@ -73,6 +73,33 @@ describe("useReadAloud voice selection", () => {
     vi.unstubAllGlobals();
   });
 
+  it("unlocks Web Audio in the paragraph click before awaiting voices and closes it on unmount", () => {
+    const resume = vi.fn(async () => undefined);
+    const close = vi.fn(async () => undefined);
+    vi.stubGlobal(
+      "AudioContext",
+      class {
+        resume = resume;
+        close = close;
+      },
+    );
+    mocks.fetchSpeechVoices.mockReturnValueOnce(
+      new Promise(() => {
+        /* Keep the voices request pending. */
+      }),
+    );
+    const { result, unmount } = renderHook(() =>
+      useReadAloud("bookmark-1", true),
+    );
+    act(() => {
+      void result.current.startAt(42);
+    });
+    expect(resume).toHaveBeenCalledOnce();
+    expect(mocks.fetchSpeechChunk).not.toHaveBeenCalled();
+    unmount();
+    expect(close).toHaveBeenCalledOnce();
+  });
+
   it("exposes chunk navigation and clears its state when switching bookmarks", async () => {
     mocks.fetchSpeechChunk
       .mockResolvedValueOnce({

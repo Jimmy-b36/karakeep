@@ -81,6 +81,45 @@ function setupPlayer() {
 }
 
 describe("ReadAloudPlayer", () => {
+  it("decodes and queues prepared successors before ended, advancing metadata without replay", async () => {
+    const { audio, play } = createFakeAudio();
+    const prepare = vi.fn(async () => ({ duration: 2 }) as AudioBuffer);
+    const setBuffer = vi.fn();
+    const enqueue = vi.fn();
+    Object.assign(audio, { prepare, setBuffer, enqueue });
+    const fetchChunk = vi
+      .fn()
+      .mockResolvedValueOnce(chunk(100, "v1", "0-100/200", "First"))
+      .mockResolvedValueOnce(chunk(null, "v1", "100-200/200", "Second"));
+    const createObjectURL = vi.fn(() => "blob:test");
+    const player = new ReadAloudPlayer(
+      {
+        fetchChunk,
+        createAudio: () => audio,
+        createObjectURL,
+        revokeObjectURL: vi.fn(),
+        onSnapshot: vi.fn(),
+      },
+      "bookmark",
+      "voice",
+      1,
+    );
+    player.start();
+    await flush();
+    expect(prepare).toHaveBeenCalledTimes(2);
+    expect(enqueue).toHaveBeenCalledOnce();
+    expect(player.currentSnapshot.currentText).toBe("First");
+    enqueue.mock.calls[0][1]();
+    expect(player.currentSnapshot).toMatchObject({
+      currentText: "Second",
+      canPrevious: true,
+      canNext: false,
+      status: "playing",
+    });
+    expect(play).toHaveBeenCalledOnce();
+    expect(createObjectURL).not.toHaveBeenCalled();
+    player.dispose();
+  });
   it.each(["ended", "next", "paused"])(
     "does not report buffering for a ready segment on %s",
     async (transition) => {

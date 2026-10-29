@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createReadAloudAudio } from "@/lib/read-aloud-audio";
 
 import {
   fetchSpeechChunk,
@@ -88,7 +89,7 @@ export function useReadAloud(bookmarkId: string, enabled: boolean) {
     const player = new ReadAloudPlayer(
       {
         fetchChunk: fetchSpeechChunk,
-        createAudio: () => new Audio(),
+        createAudio: createReadAloudAudio,
         createObjectURL: (blob) => URL.createObjectURL(blob),
         revokeObjectURL: (url) => URL.revokeObjectURL(url),
         onSnapshot: setSnapshot,
@@ -202,6 +203,7 @@ export function useReadAloud(bookmarkId: string, enabled: boolean) {
     async (offset: number) => {
       const player = playerRef.current;
       if (!player) return;
+      player.unlock();
       const request = ++startRequestRef.current;
       await loadVoices();
       if (
