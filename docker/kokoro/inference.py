@@ -57,6 +57,13 @@ def generate(g2p, session, vocab, voices, text, voice, speed):
         yield SimpleNamespace(audio=torch.from_numpy(np.asarray(waveform).reshape(-1)), tokens=result.tokens)
 
 
+def literal_pipeline(lang):
+    pipeline = KPipeline(lang_code=lang, model=False, repo_id="hexgrad/Kokoro-82M")
+    # Article text is already plain text, not Misaki's Markdown pronunciation syntax.
+    pipeline.g2p = partial(pipeline.g2p, preprocess=False)
+    return pipeline
+
+
 def load_pipelines(voice_names, revision, prepare=False):
     def artifact(filename):
         return hf_hub_download("hexgrad/Kokoro-82M", filename, revision=revision, local_files_only=not prepare)
@@ -97,7 +104,7 @@ def load_pipelines(voice_names, revision, prepare=False):
     if model_vocab != vocab:
         raise RuntimeError("Model and phonemizer vocabularies differ")
     pipelines = {
-        lang: partial(generate, KPipeline(lang_code=lang, model=False, repo_id="hexgrad/Kokoro-82M"), session, vocab, voices)
+        lang: partial(generate, literal_pipeline(lang), session, vocab, voices)
         for lang in ("a", "b")
     }
     return pipelines, voice_files

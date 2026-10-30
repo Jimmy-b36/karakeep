@@ -1,4 +1,5 @@
 import { and, desc, eq, isNotNull, ne, or } from "drizzle-orm";
+import cron from "node-cron";
 
 import { db } from "@karakeep/db";
 import { bookmarkLinks, bookmarks } from "@karakeep/db/schema";
@@ -26,53 +27,87 @@ import {
 } from "@karakeep/shared/utils/speech";
 import { Bookmark } from "@karakeep/trpc/models/bookmarks";
 
+let preparingRecentSpeech = false;
+
 export async function prepareRecentSpeech(): Promise<void> {
-  if (!serverConfig.speech.kokoroUrl || !serverConfig.speech.kokoroToken)
+  if (
+    !serverConfig.speech.kokoroUrl ||
+    !serverConfig.speech.kokoroToken ||
+    preparingRecentSpeech
+  )
     return;
-  let prepared = 0;
-  for (let offset = 0; prepared < 10; offset += 25) {
-    const recent = await db
-      .select({
-        id: bookmarks.id,
-        userId: bookmarks.userId,
-        htmlContent: bookmarkLinks.htmlContent,
-        contentAssetId: bookmarkLinks.contentAssetId,
-      })
-      .from(bookmarks)
-      .innerJoin(bookmarkLinks, eq(bookmarks.id, bookmarkLinks.id))
-      .where(
-        and(
-          eq(bookmarks.type, BookmarkTypes.LINK),
-          eq(bookmarks.inLibrary, true),
-          or(
-            ne(bookmarkLinks.htmlContent, ""),
-            isNotNull(bookmarkLinks.contentAssetId),
-          ),
-        ),
-      )
-      .orderBy(desc(bookmarks.createdAt), desc(bookmarks.id))
-      .limit(25)
-      .offset(offset);
-    for (const bookmark of recent) {
-      let html: string | null;
-      try {
-        html = await Bookmark.getBookmarkHtmlContent(bookmark, bookmark.userId);
-      } catch {
-        logger.warn(
-          `[speech] Could not read article ${bookmark.id} during backfill`,
-        );
-        continue;
+  preparingRecentSpeech = true;
+  try {
+    let prepared = 0;
+    const owners = await db.query.users.findMany({ columns: { id: true } });
+    for (const owner of owners) {
+      let userPrepared = 0;
+      for (let offset = 0; userPrepared < 10; offset += 25) {
+        const recent = await db
+          .select({
+            id: bookmarks.id,
+            userId: bookmarks.userId,
+            htmlContent: bookmarkLinks.htmlContent,
+            contentAssetId: bookmarkLinks.contentAssetId,
+          })
+          .from(bookmarks)
+          .innerJoin(bookmarkLinks, eq(bookmarks.id, bookmarkLinks.id))
+          .where(
+            and(
+              eq(bookmarks.userId, owner.id),
+              eq(bookmarks.type, BookmarkTypes.LINK),
+              eq(bookmarks.inLibrary, true),
+              or(
+                ne(bookmarkLinks.htmlContent, ""),
+                isNotNull(bookmarkLinks.contentAssetId),
+              ),
+            ),
+          )
+          .orderBy(desc(bookmarks.createdAt), desc(bookmarks.id))
+          .limit(25)
+          .offset(offset);
+        for (const bookmark of recent) {
+          let html: string | null;
+          try {
+            html = await Bookmark.getBookmarkHtmlContent(
+              bookmark,
+              bookmark.userId,
+            );
+          } catch {
+            logger.warn(
+              `[speech] Could not read article ${bookmark.id} during backfill`,
+            );
+            continue;
+          }
+          if (!readableSpeechText(html ?? "")) continue;
+          await enqueueSpeechPreparation(bookmark.id, {
+            groupId: bookmark.userId,
+          });
+          prepared++;
+          if (++userPrepared === 10) break;
+        }
+        if (recent.length < 25) break;
       }
-      if (!readableSpeechText(html ?? "")) continue;
-      await enqueueSpeechPreparation(bookmark.id, { groupId: bookmark.userId });
-      if (++prepared === 10) break;
     }
-    if (recent.length < 25) break;
+    logger.info(
+      `[speech] Queued ${prepared} recent saved articles for Emma preparation`,
+    );
+  } finally {
+    preparingRecentSpeech = false;
   }
-  logger.info(
-    `[speech] Queued ${prepared} recent saved articles for Emma preparation`,
-  );
 }
+
+export const SpeechPreparationSchedulingWorker = cron.schedule(
+  "*/30 * * * *",
+  async () => {
+    try {
+      await prepareRecentSpeech();
+    } catch (error) {
+      logger.error(`[speech] Could not queue recent articles: ${error}`);
+    }
+  },
+  { runOnInit: false, scheduled: false },
+);
 
 export async function runSpeechPreparation(
   job: DequeuedJob<ZSpeechPreparationRequest>,
@@ -141,7 +176,7 @@ export class SpeechWorker {
         run: runSpeechPreparation,
         onError: async (job) => {
           logger.error(
-            `[speech][${job.id}] Preparation failed: ${job.error.message}`,
+            `[speech][${job.id}] Preparation failed: bookmark=${job.data?.bookmarkId ?? "unknown"} start=${job.data?.start ?? "unknown"} version=${job.data?.contentVersion ?? "initial"} retriesLeft=${job.numRetriesLeft}: ${job.error.message}`,
           );
         },
       },

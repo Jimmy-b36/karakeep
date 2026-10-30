@@ -4,6 +4,7 @@ import hmac
 import io
 import json
 import os
+import re
 import sys
 import threading
 import time
@@ -37,15 +38,22 @@ def synthesize(pipeline, voice_file, text):
     import numpy as np
     audio_parts, words = [], []
     elapsed = 0.0
+    # Misaki can drop apostrophes inside merged code/URL tokens; retain original offsets.
+    positions = [i for i, character in enumerate(text) if character not in "'‘’"]
+    normalized = "".join(text[i] for i in positions)
     cursor = 0
     for result in pipeline(text, voice=voice_file, speed=1):
         audio = result.audio.numpy()
         duration = len(audio) / 24000
         for token in result.tokens or []:
-            position = text.find(token.text, cursor)
+            spoken_text = token.text.translate(str.maketrans("", "", "'‘’"))
+            if not spoken_text:
+                continue
+            position = normalized.find(spoken_text, cursor)
             if position < 0:
                 raise ValueError("Tokenizer text cannot be mapped to the original")
-            cursor = position + len(token.text)
+            cursor = position + len(spoken_text)
+            begin_position, end_position = positions[position], positions[cursor - 1] + 1
             if token.start_ts is None or token.end_ts is None:
                 if token.phonemes:
                     raise ValueError("Spoken token has no timing")
@@ -54,8 +62,8 @@ def synthesize(pipeline, voice_file, text):
             if not 0 <= start <= end <= duration + 0.1:
                 raise ValueError("Invalid generated timing")
             # Browser DOM ranges use UTF-16 offsets, Python strings use codepoints.
-            begin = len(text[:position].encode("utf-16-le")) // 2
-            finish = len(text[:cursor].encode("utf-16-le")) // 2
+            begin = len(text[:begin_position].encode("utf-16-le")) // 2
+            finish = len(text[:end_position].encode("utf-16-le")) // 2
             words.append({"from": begin, "to": finish, "start": elapsed + start, "end": elapsed + end})
         audio_parts.append(audio)
         elapsed += duration
@@ -72,6 +80,36 @@ def synthesize(pipeline, voice_file, text):
     if len(payload) > 32 * 1024 * 1024:
         raise ValueError("Audio too large")
     return {"audio": base64.b64encode(payload).decode("ascii"), "words": words, "duration": elapsed}
+
+
+def trim_speech(result, text):
+    """Remove model edge padding on delivery, including from existing cache entries."""
+    import numpy as np
+
+    with wave.open(io.BytesIO(base64.b64decode(result["audio"]))) as wav:
+        rate = wav.getframerate()
+        samples = np.frombuffer(wav.readframes(wav.getnframes()), dtype="<i2")
+    audible = np.flatnonzero(samples)
+    if not len(audible):
+        return result
+    # Trim only digital silence: retain every nonzero sample, however quiet.
+    first = max(0, int(audible[0]) - round(0.05 * rate))
+    pause = 0.25 if re.search(r"[.!?:;][\"'’”)]*\s*$", text) else 0.1
+    last = min(len(samples), int(audible[-1]) + 1 + round(pause * rate))
+    if first == 0 and last == len(samples):
+        return result
+    duration = (last - first) / rate
+    shift = first / rate
+    words = [dict(word, start=min(duration, max(0, word["start"] - shift)),
+                  end=min(duration, max(0, word["end"] - shift))) for word in result["words"]]
+    output = io.BytesIO()
+    with wave.open(output, "wb") as wav:
+        wav.setnchannels(1)
+        wav.setsampwidth(2)
+        wav.setframerate(rate)
+        wav.writeframes(samples[first:last].tobytes())
+    return {"audio": base64.b64encode(output.getvalue()).decode("ascii"),
+            "words": words, "duration": duration}
 
 
 def main(prepare=False):
@@ -145,12 +183,14 @@ def main(prepare=False):
                 selected_voice = voice_id(data.get("voice"))
             except (ValueError, OSError):
                 return self.reply(400, {"error": "Invalid request"})
+            # Only bracketed text can have legacy Markdown-preprocessed cache entries.
+            cache_voice = f"{selected_voice}:literal-v1" if "[" in text else selected_voice
             background = self.headers.get("X-Speech-Priority") == "background"
             if not background:
                 last_foreground = time.monotonic()
-            cached = cache.get(text, selected_voice)
+            cached = cache.get(text, cache_voice)
             if cached is not None:
-                return self.reply(200, cached, cache_hit=True)
+                return self.reply(200, trim_speech(cached, text), cache_hit=True)
             if background and time.monotonic() - last_foreground < 30:
                 return self.reply(503, {"error": "Listening has priority"}, retry_after=30)
             # A foreground listener waits for at most the current background chunk.
@@ -158,17 +198,17 @@ def main(prepare=False):
             if not acquired:
                 return self.reply(503, {"error": "Busy"})
             try:
-                cached = cache.get(text, selected_voice)
+                cached = cache.get(text, cache_voice)
                 if cached is not None:
-                    return self.reply(200, cached, cache_hit=True)
+                    return self.reply(200, trim_speech(cached, text), cache_hit=True)
                 result = synthesize(pipelines[selected_voice[0]], voice_files[selected_voice], text)
                 try:
-                    cache.put(text, selected_voice, result)
+                    cache.put(text, cache_voice, result)
                 except OSError:
                     if background:
                         raise
                     print("Speech cache write failed; serving uncached audio", file=sys.stderr, flush=True)
-                self.reply(200, result, cache_hit=False)
+                self.reply(200, trim_speech(result, text), cache_hit=False)
             except (BrokenPipeError, ConnectionResetError):
                 pass
             except Exception as error:

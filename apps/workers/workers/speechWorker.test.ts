@@ -1,3 +1,4 @@
+import { SQLiteSyncDialect } from "drizzle-orm/sqlite-core";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => {
@@ -17,6 +18,10 @@ const mocks = vi.hoisted(() => {
   return {
     select,
     find: vi.fn(),
+    owners: vi.fn(),
+    createRunner: vi.fn(),
+    errorLog: vi.fn(),
+    scheduledRun: null as (() => Promise<void>) | null,
     html: vi.fn(),
     synthesize: vi.fn(),
     enqueue: vi.fn(),
@@ -30,12 +35,15 @@ const mocks = vi.hoisted(() => {
 vi.mock("@karakeep/db", () => ({
   db: {
     select: () => mocks.select,
-    query: { bookmarks: { findFirst: mocks.find } },
+    query: {
+      bookmarks: { findFirst: mocks.find },
+      users: { findMany: mocks.owners },
+    },
   },
 }));
 vi.mock("@karakeep/shared/config", () => ({ default: mocks.config }));
 vi.mock("@karakeep/shared/logger", () => ({
-  default: { info: vi.fn(), error: vi.fn(), warn: vi.fn() },
+  default: { info: vi.fn(), error: mocks.errorLog, warn: vi.fn() },
 }));
 vi.mock("@karakeep/shared-server", () => ({
   enqueueSpeechPreparation: mocks.initial,
@@ -48,8 +56,25 @@ vi.mock("@karakeep/trpc/models/bookmarks", () => ({
   Bookmark: { getBookmarkHtmlContent: mocks.html },
 }));
 
+vi.mock("node-cron", () => ({
+  default: {
+    schedule: (_expression: string, callback: () => Promise<void>) => {
+      mocks.scheduledRun = callback;
+      return { start: vi.fn(), stop: vi.fn() };
+    },
+  },
+}));
+vi.mock("@karakeep/shared/queueing", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@karakeep/shared/queueing")>()),
+  getQueueClient: async () => ({ createRunner: mocks.createRunner }),
+}));
+
 import { speechContentVersion } from "@karakeep/shared/utils/speech";
-import { prepareRecentSpeech, runSpeechPreparation } from "./speechWorker";
+import {
+  prepareRecentSpeech,
+  runSpeechPreparation,
+  SpeechWorker,
+} from "./speechWorker";
 
 function job(start = 0, contentVersion?: string) {
   return {
@@ -64,6 +89,7 @@ function job(start = 0, contentVersion?: string) {
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.config.speech.kokoroUrl = "http://kokoro:4320";
+  mocks.owners.mockResolvedValue([{ id: "owner" }]);
   mocks.find.mockResolvedValue({
     id: "bookmark",
     userId: "owner",
@@ -127,6 +153,111 @@ describe("speech preparation", () => {
     await prepareRecentSpeech();
     expect(mocks.select.offset.mock.calls).toEqual([[0], [25]]);
     expect(mocks.initial).toHaveBeenCalledTimes(10);
+  });
+
+  it("queues ten readable articles independently for each user", async () => {
+    mocks.owners.mockResolvedValue([{ id: "owner" }, { id: "second-owner" }]);
+    mocks.select.offset.mockImplementation(async () =>
+      Array.from({ length: 12 }, (_, index) => ({
+        id: `article-${mocks.select.offset.mock.calls.length}-${index}`,
+        userId:
+          mocks.select.offset.mock.calls.length === 1
+            ? "owner"
+            : "second-owner",
+      })),
+    );
+    await prepareRecentSpeech();
+    expect(mocks.initial).toHaveBeenCalledTimes(20);
+    expect(
+      mocks.initial.mock.calls.filter(
+        ([, options]) => options.groupId === "owner",
+      ),
+    ).toHaveLength(10);
+    expect(
+      mocks.initial.mock.calls.filter(
+        ([, options]) => options.groupId === "second-owner",
+      ),
+    ).toHaveLength(10);
+    expect(mocks.select.offset.mock.calls).toEqual([[0], [0]]);
+    const dialect = new SQLiteSyncDialect();
+    const filters = mocks.select.where.mock.calls.map(([sql]) =>
+      dialect.sqlToQuery(sql),
+    );
+    expect(filters[0]!.sql).toContain('"bookmarks"."userId" = ?');
+    expect(filters[0]!.params).toContain("owner");
+    expect(filters[1]!.params).toContain("second-owner");
+  });
+
+  it("reconciles again after a failed pass without requiring a restart", async () => {
+    mocks.owners.mockRejectedValueOnce(new Error("Database unavailable"));
+    await mocks.scheduledRun!();
+    expect(mocks.errorLog).toHaveBeenCalledWith(
+      expect.stringContaining("Could not queue recent articles"),
+    );
+    await mocks.scheduledRun!();
+    expect(mocks.initial).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not overlap reconciliation passes and releases the guard after completion", async () => {
+    let finish!: (owners: { id: string }[]) => void;
+    mocks.owners.mockReturnValueOnce(
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+    );
+    const running = prepareRecentSpeech();
+    await mocks.scheduledRun!();
+    expect(mocks.owners).toHaveBeenCalledOnce();
+    finish([{ id: "owner" }]);
+    await running;
+    await mocks.scheduledRun!();
+    expect(mocks.owners).toHaveBeenCalledTimes(2);
+  });
+
+  it("revisits a failed continuation and reaches the rest of the article", async () => {
+    const text = "Read this interesting article together. ".repeat(12).trim();
+    const version = speechContentVersion(text);
+    await runSpeechPreparation(job());
+    const next = mocks.enqueue.mock.calls[0]![0].start;
+    mocks.synthesize.mockRejectedValueOnce(new Error("Synthesis unavailable"));
+    await expect(runSpeechPreparation(job(next, version))).rejects.toThrow(
+      "Synthesis unavailable",
+    );
+    expect(mocks.enqueue).toHaveBeenCalledOnce();
+
+    mocks.select.offset.mockResolvedValue([
+      { id: "bookmark", userId: "owner" },
+    ]);
+    await mocks.scheduledRun!();
+    expect(mocks.initial).toHaveBeenCalledWith("bookmark", {
+      groupId: "owner",
+    });
+    mocks.enqueue.mockClear();
+    mocks.synthesize.mockClear();
+    await runSpeechPreparation(job());
+    for (const [continuation] of mocks.enqueue.mock.calls) {
+      await runSpeechPreparation(
+        job(continuation.start, continuation.contentVersion),
+      );
+    }
+    expect(
+      mocks.synthesize.mock.calls.map(([content]) => content).join(""),
+    ).toBe(text);
+  });
+
+  it("logs failed chunk identity and retries remaining", async () => {
+    await SpeechWorker.build();
+    const callbacks = mocks.createRunner.mock.calls[0]![1];
+    await callbacks.onError({
+      ...job(160, "version"),
+      numRetriesLeft: 0,
+      error: new Error("Unavailable"),
+    });
+    expect(mocks.errorLog).toHaveBeenCalledWith(
+      expect.stringContaining(
+        "bookmark=bookmark start=160 version=version retriesLeft=0",
+      ),
+    );
   });
 
   it("generates only one Emma chunk per job and queues a versioned continuation", async () => {

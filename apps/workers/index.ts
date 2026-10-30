@@ -29,6 +29,9 @@ import logger from "@karakeep/shared/logger";
 
 import { shutdownPromise } from "./exit";
 
+let speechPreparationSchedulingWorker:
+  | typeof import("./workers/speechWorker").SpeechPreparationSchedulingWorker
+  | undefined;
 let backupSchedulingWorker:
   | typeof import("./workers/backupWorker").BackupSchedulingWorker
   | undefined;
@@ -59,7 +62,9 @@ const workerBuilders = {
     return OpenAiWorker.build();
   },
   speech: async () => {
-    const { SpeechWorker } = await import("./workers/speechWorker");
+    const { SpeechWorker, SpeechPreparationSchedulingWorker } =
+      await import("./workers/speechWorker");
+    speechPreparationSchedulingWorker = SpeechPreparationSchedulingWorker;
     await SpeechPreparationQueue.ensureInit();
     return SpeechWorker.build();
   },
@@ -151,6 +156,7 @@ async function main() {
   await startQueue();
 
   if (workers.some((worker) => worker.name === "speech")) {
+    speechPreparationSchedulingWorker?.start();
     const { prepareRecentSpeech } = await import("./workers/speechWorker");
     void prepareRecentSpeech().catch((error: unknown) => {
       logger.error(`[speech] Could not queue recent articles: ${error}`);
@@ -190,6 +196,7 @@ async function main() {
     `Shutting down ${workers.map((w) => w.name).join(", ")} workers ...`,
   );
 
+  speechPreparationSchedulingWorker?.stop();
   if (workers.some((w) => w.name === "feed")) {
     feedRefreshingWorker?.stop();
   }
