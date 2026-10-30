@@ -196,6 +196,7 @@ class SynthesisTests(unittest.TestCase):
         raw = synthesize(pipeline, "unused", "Hi")
         with patch("inference.load_pipelines", return_value=({"b": object()}, {"bf_emma": "voice"})), \
              patch("cache.SpeechCache") as cache_class, \
+             patch("service.threading.Lock") as lock_class, \
              patch("service.ThreadingHTTPServer") as server, \
              patch.dict("os.environ", {"KOKORO_TOKEN": "x" * 32}), \
              patch("service.synthesize", return_value=raw) as generate:
@@ -203,6 +204,8 @@ class SynthesisTests(unittest.TestCase):
             handler_class = server.call_args.args[1]
             cache = cache_class.return_value
             cache.get.return_value = raw
+            lock = lock_class.return_value
+            lock.acquire.return_value = True
 
             def request(text, background=False):
                 handler = handler_class.__new__(handler_class)
@@ -235,6 +238,7 @@ class SynthesisTests(unittest.TestCase):
             self.assertEqual(request("Hi", background=True)[0], 503)
             status, value, headers = request("Hi [link](target)")
             self.assertEqual((status, headers["cache_hit"]), (200, False))
+            lock.acquire.assert_called_with(timeout=30)
             self.assertEqual(cache.put.call_args.args, ("Hi [link](target)", "bf_emma:literal-v1", raw))
             self.assertLess(value["duration"], raw["duration"])
             self.assertEqual(raw["duration"], 2.0)
@@ -242,6 +246,12 @@ class SynthesisTests(unittest.TestCase):
             status, value, headers = request("Hi")
             self.assertEqual((status, headers["cache_hit"]), (200, True))
             self.assertLess(value["duration"], raw["duration"])
+            generate.assert_called_once()
+            cache.get.side_effect = None
+            cache.get.return_value = None
+            lock.acquire.return_value = False
+            self.assertEqual(request("Hi")[0], 503)
+            lock.acquire.assert_called_with(timeout=30)
             generate.assert_called_once()
 
     def test_silent_audio_is_not_trimmed_to_an_empty_wav(self):

@@ -197,8 +197,8 @@ def main(prepare=False):
                 return self.reply(200, trim_speech(cached, text), cache_hit=True)
             if background and time.monotonic() - last_foreground < 30:
                 return self.reply(503, {"error": "Listening has priority"}, retry_after=30)
-            # A foreground listener waits for at most the current background chunk.
-            acquired = busy.acquire(blocking=False) if background else busy.acquire(timeout=45)
+            # Reserve 40s of the app's 70s request deadline for sentence synthesis.
+            acquired = busy.acquire(blocking=False) if background else busy.acquire(timeout=30)
             if not acquired:
                 return self.reply(503, {"error": "Busy"})
             try:

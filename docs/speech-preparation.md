@@ -14,6 +14,8 @@ A sentence larger than the hard ceiling falls back to substantial clause boundar
 
 The content-version hash includes `speech-sentences-v1`. Old playback continuations receive restart/409, and old preparation jobs restart at zero. Changed batch texts need new cached audio; there is no cache purge or database migration.
 
+Foreground lock acquisition is capped at 30 seconds, reserving 40 seconds of the application's 70-second request deadline for synthesis. The initial isolated Pi check measured a 320-codepoint technical sample at 25.3 seconds and peak cgroup memory at 1.76 GB under the existing 2.5-GiB/3-CPU limits; this exposed the old 45-second lock wait as too long for the larger batches. A busy lock returns retryable 503 instead of consuming the synthesis budget.
+
 **Rollout:** deploy the updated Kokoro service before the application/worker image, because the old service rejects requests above 160 characters. The 240/320 envelope is provisional: run Pi latency/RSS and listening checks before deployment. A local Mac ONNX/Emma check with 3 inference threads measured 160/240/320-character requests at about 2.0/3.0/3.9 seconds with process peak RSS about 1.69/2.00/2.36 GB. These are sequential single-process measurements, not Pi/container guarantees or a listening comparison; the 320-character case is close enough to the 2.5-GiB limit to require that deployment gate.
 
 ## Cache
