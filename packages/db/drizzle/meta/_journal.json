@@ -680,6 +680,13 @@
       "when": 1792503266145,
       "tag": "0096_separate_rss_library",
       "breakpoints": true
+    },
+    {
+      "idx": 97,
+      "version": "6",
+      "when": 1792503266146,
+      "tag": "0097_add_in_app_subscriptions",
+      "breakpoints": true
     }
   ]
 }
