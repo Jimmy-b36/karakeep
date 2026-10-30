@@ -123,7 +123,7 @@ function buildBookmarkApp(ctx: Context) {
 
 function speechVersionFor(text: string): string {
   return `sha256:${createHash("sha256")
-    .update("text")
+    .update("speech-sentences-v1")
     .update("\0")
     .update(text)
     .digest("hex")}`;
@@ -244,7 +244,7 @@ describe("GET /speech/voices", () => {
 });
 
 describe("POST /bookmarks/:bookmarkId/speech", () => {
-  it("uses shorter word-boundary chunks for local timed speech", async () => {
+  it("uses bounded word fallbacks for oversized local timed sentences", async () => {
     fakeBookmark({ htmlContent: "<p>" + "sample words ".repeat(80) + "</p>" });
     synthesizeTimedSpeechMock.mockResolvedValue({
       audio: "test",
@@ -256,7 +256,7 @@ describe("POST /bookmarks/:bookmarkId/speech", () => {
     });
     expect(response.status).toBe(200);
     const text = synthesizeTimedSpeechMock.mock.calls[0][0] as string;
-    expect(Array.from(text).length).toBeLessThanOrEqual(160);
+    expect(Array.from(text).length).toBeLessThanOrEqual(320);
     expect(text.endsWith(" ")).toBe(true);
     expect(Number(response.headers.get("X-Speech-Next"))).toBe(
       Array.from(text).length,
@@ -269,11 +269,43 @@ describe("POST /bookmarks/:bookmarkId/speech", () => {
     });
     expect(continuation.status).toBe(200);
     const following = synthesizeTimedSpeechMock.mock.calls[1]![0] as string;
-    expect(Array.from(following).length).toBeLessThanOrEqual(160);
+    expect(Array.from(following).length).toBeLessThanOrEqual(320);
     expect(text + following).toBe(
       "sample words ".repeat(80).slice(0, next + following.length),
     );
   });
+  it("sends complete short sentences together and stops at paragraph boundaries", async () => {
+    const first =
+      "Yes. Exactly. " + "This thought continues naturally. ".repeat(5);
+    fakeBookmark({ htmlContent: `<p>${first}</p><p>The next paragraph.</p>` });
+    synthesizeTimedSpeechMock.mockResolvedValue({
+      audio: "test",
+      duration: 1,
+      words: [],
+    });
+    const response = await postSpeech(buildBookmarkApp(sessionCtx), {
+      voice: "kokoro:bf_emma",
+    });
+    expect(response.status).toBe(200);
+    const text = synthesizeTimedSpeechMock.mock.calls[0]![0] as string;
+    expect(text).toBe(first.trimEnd() + "\n\n");
+    expect(Number(response.headers.get("X-Speech-Next"))).toBe(
+      Array.from(text).length,
+    );
+  });
+
+  it("rejects continuation offsets from the previous chunking policy", async () => {
+    fakeBookmark({ htmlContent: "<p>Hello world.</p>" });
+    const legacy = `sha256:${createHash("sha256").update("text").update("\0").update("Hello world.").digest("hex")}`;
+    const response = await postSpeech(buildBookmarkApp(sessionCtx), {
+      voice: "kokoro:bf_emma",
+      start: 5,
+      contentVersion: legacy,
+    });
+    expect(response.status).toBe(409);
+    expect(synthesizeTimedSpeechMock).not.toHaveBeenCalled();
+  });
+
   it("denies timed synthesis to nonowners without contacting either worker", async () => {
     fakeBookmark({
       ensureOwnershipError: new TRPCError({ code: "FORBIDDEN" }),

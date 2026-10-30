@@ -13,6 +13,7 @@ import wave
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 MODEL_REVISION = "f3ff3571791e39611d31c381e3a41a3af07b4987"
+MAX_TEXT_LENGTH = 320
 VOICES = {
     "af_heart": ("Heart · American female", "en-US"),
     "af_bella": ("Bella · American female", "en-US"),
@@ -177,14 +178,17 @@ def main(prepare=False):
                     return self.reply(413, {"error": "Invalid body length"})
                 data = json.loads(self.rfile.read(size))
                 text = data.get("text") if isinstance(data, dict) else None
-                # shortcut: Karakeep sends <=160 characters; benchmark RAM before allowing larger chunks.
-                if not isinstance(text, str) or not text.strip() or len(text) > 160:
+                # shortcut: cap sentence batches at 320 codepoints; benchmark the Pi before raising it.
+                if not isinstance(text, str) or not text.strip() or len(text) > MAX_TEXT_LENGTH:
                     return self.reply(400, {"error": "Invalid text or voice"})
                 selected_voice = voice_id(data.get("voice"))
             except (ValueError, OSError):
                 return self.reply(400, {"error": "Invalid request"})
             # Only bracketed text can have legacy Markdown-preprocessed cache entries.
             cache_voice = f"{selected_voice}:literal-v1" if "[" in text else selected_voice
+            # Legacy multiline cache entries contain per-line prosody resets.
+            if "\n" in text or "\r" in text:
+                cache_voice = f"{selected_voice}:unwrapped-v1"
             background = self.headers.get("X-Speech-Priority") == "background"
             if not background:
                 last_foreground = time.monotonic()

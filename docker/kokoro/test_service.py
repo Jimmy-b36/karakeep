@@ -4,11 +4,11 @@ import json
 import unittest
 import wave
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import numpy as np
 
-from service import VOICES, main, synthesize, trim_speech, voice_id
+from service import MAX_TEXT_LENGTH, VOICES, main, synthesize, trim_speech, voice_id
 
 
 class SynthesisTests(unittest.TestCase):
@@ -26,7 +26,8 @@ class SynthesisTests(unittest.TestCase):
 
         token = SimpleNamespace(text="Hi", phonemes="hi", whitespace="", start_ts=None, end_ts=None)
 
-        def g2p(_text):
+        def g2p(_text, *, split_pattern):
+            self.assertIsNone(split_pattern)
             yield SimpleNamespace(phonemes="hi", tokens=[token])
 
         class Session:
@@ -39,6 +40,37 @@ class SynthesisTests(unittest.TestCase):
         self.assertEqual(len(parts), 1)
         self.assertEqual((token.start_ts, token.end_ts), (0, 0.2))
         self.assertEqual(len(parts[0].audio.numpy()), 8400)
+
+    def test_wrapped_lines_are_one_model_utterance_without_losing_original_offsets(self):
+        from inference import generate, literal_pipeline
+
+        pipeline = literal_pipeline("b")
+        text = "Yes.\nExactly. This is one thought."
+        expected = list(pipeline(text, split_pattern=None))
+        self.assertEqual(len(expected), 1)
+        vocab = {p: i for i, p in enumerate(set(expected[0].phonemes))}
+        calls = []
+        class Session:
+            def run(self, _outputs, inputs):
+                calls.append(inputs)
+                frames = np.full(inputs["input_ids"].size, 4, dtype=np.int64)
+                return np.zeros(int(frames.sum()) * 600, dtype=np.float32), frames
+        def voice(_text, **_kwargs):
+            return generate(pipeline, Session(), vocab, {"voice": np.zeros((510, 1, 256))}, text, "voice", 1)
+        result = synthesize(voice, "unused", text)
+        self.assertEqual(len(calls), 1)
+        self.assertIn("Exactly", [text[w["from"]:w["to"]].strip() for w in result["words"]])
+        self.assertTrue(all(0 <= w["start"] <= w["end"] <= result["duration"] for w in result["words"]))
+
+    def test_oversized_or_truncated_phonemes_fail_before_model_inference(self):
+        from inference import generate
+        for phonemes, original in (("h" * 511, "h" * 511), ("h" * 510, "h" * 511)):
+            def pipeline(_text, phonemes=phonemes, original=original, **_kwargs):
+                yield SimpleNamespace(phonemes=phonemes, tokens=[SimpleNamespace(phonemes=original, whitespace="")])
+            session = Mock()
+            with self.assertRaisesRegex(ValueError, "phoneme limit"):
+                list(generate(pipeline, session, {"h": 1}, {}, "text", "voice", 1))
+            session.run.assert_not_called()
 
     def test_punctuation_and_unknown_phonemes_do_not_consume_extra_frames(self):
         from inference import join_model_timestamps
@@ -192,6 +224,12 @@ class SynthesisTests(unittest.TestCase):
             self.assertEqual(cache.get.call_args.args, ("Hi", "bf_emma"))
             self.assertEqual(request("Hi", background=True)[0], 200)
             generate.assert_not_called()
+            self.assertEqual(request("a" * MAX_TEXT_LENGTH)[0], 200)
+            self.assertEqual(request("😀" * MAX_TEXT_LENGTH)[0], 200)
+            self.assertEqual(request("a" * (MAX_TEXT_LENGTH + 1))[0], 400)
+            self.assertEqual(request("😀" * (MAX_TEXT_LENGTH + 1))[0], 400)
+            request("Hi\nthere")
+            self.assertEqual(cache.get.call_args.args, ("Hi\nthere", "bf_emma:unwrapped-v1"))
 
             cache.get.return_value = None
             self.assertEqual(request("Hi", background=True)[0], 503)

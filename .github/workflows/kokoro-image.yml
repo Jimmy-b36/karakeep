@@ -26,10 +26,12 @@ jobs:
         run: |
           set -euo pipefail
           docker run -d --name kokoro-smoke --network none --cap-drop ALL --security-opt no-new-privileges \
-            --memory 2g --cpus 2 --pids-limit 256 \
+            --memory 2560m --cpus 3 --pids-limit 256 \
             -e KOKORO_TOKEN=synthetic-test-token-000000000000000000 "${IMAGE}"
           docker exec -i kokoro-smoke python - <<'PY'
-          import base64, json, time, urllib.request, urllib.error
+          import base64, json, sys, time, urllib.request, urllib.error
+          sys.path.insert(0, '/opt')
+          from service import MAX_TEXT_LENGTH
           base = 'http://127.0.0.1:4320'
           for attempt in range(60):
               try:
@@ -45,15 +47,33 @@ jobs:
           except urllib.error.HTTPError as error:
               assert error.code == 401
           headers = {'Authorization': 'Bearer synthetic-test-token-000000000000000000', 'Content-Type': 'application/json'}
-          text = 'Hello world. This is a local word timing check.'
-          request = urllib.request.Request(base + '/synthesize', data=json.dumps({'text': text, 'voice': 'kokoro:af_heart'}).encode(), headers=headers)
-          response = json.load(urllib.request.urlopen(request, timeout=70))
-          audio = base64.b64decode(response['audio'], validate=True)
-          assert audio[:4] == b'RIFF' and audio[8:12] == b'WAVE'
-          assert len(response['words']) >= 8
-          for word in response['words']:
-              assert text[word['from']:word['to']].strip()
-              assert 0 <= word['start'] <= word['end'] <= response['duration'] + 0.1
+          texts = [
+              'Hello world. This is a local word timing check.',
+              ('Yes. Exactly. This is a complete thought '
+               'with enough context for natural narration. '
+               * 5)[:MAX_TEXT_LENGTH],
+              'Yes. Exactly. This thought continues\n'
+              'across a wrapped line with original word offsets.',
+          ]
+          for text in texts:
+              started = time.monotonic()
+              body = {'text': text, 'voice': 'kokoro:bf_emma'}
+              request = urllib.request.Request(
+                  base + '/synthesize', data=json.dumps(body).encode(),
+                  headers=headers,
+              )
+              response = json.load(urllib.request.urlopen(request, timeout=70))
+              audio = base64.b64decode(response['audio'], validate=True)
+              assert audio[:4] == b'RIFF' and audio[8:12] == b'WAVE'
+              assert len(response['words']) >= 8
+              for word in response['words']:
+                  assert text[word['from']:word['to']].strip()
+                  assert 0 <= word['start'] <= word['end'] <= response['duration'] + 0.1
+              print(json.dumps({
+                  'characters': len(text),
+                  'seconds': round(time.monotonic() - started, 2),
+                  'audio_seconds': response['duration'],
+              }))
           print('Offline authenticated synthesis and word timings passed')
           PY
           docker stats --no-stream kokoro-smoke

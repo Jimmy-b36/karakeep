@@ -8,7 +8,7 @@ import time
 import wave
 from http.client import HTTPConnection
 
-from service import VOICES
+from service import MAX_TEXT_LENGTH, VOICES
 
 TOKEN = os.environ["KOKORO_TOKEN"]
 
@@ -30,16 +30,16 @@ def request(path, body=None, token=TOKEN, background=False):
 invalid_token = secrets.token_hex(32)
 assert request("/voices", token=invalid_token)[0] == 401
 assert request("/synthesize", {"text": "Hello", "voice": "kokoro:af_heart"}, token=invalid_token)[0] == 401
-for body in ({"text": "", "voice": "kokoro:af_heart"}, {"text": "Hello", "voice": "kokoro:../../etc/passwd"}, {"text": "x" * 161, "voice": "kokoro:af_heart"}):
+for body in ({"text": "", "voice": "kokoro:af_heart"}, {"text": "Hello", "voice": "kokoro:../../etc/passwd"}, {"text": "x" * (MAX_TEXT_LENGTH + 1), "voice": "kokoro:af_heart"}):
     assert request("/synthesize", body)[0] == 400
 status, voices, _ = request("/voices")
 assert status == 200
 assert {v["id"] for v in voices} == {"kokoro:" + v for v in VOICES}
 text = "Hello, hello! Today's reading has twelve books and repeated words. This checks natural speech and accurate highlighting."
-maximum_chunk = ("Bright morning sunshine fills the quiet room while we read another interesting story together. " * 2)[:160]
-assert len(maximum_chunk) == 160
+maximum_chunk = ("Bright morning sunshine fills the quiet room while we read another interesting story together. " * 4)[:MAX_TEXT_LENGTH]
+assert len(maximum_chunk) == MAX_TEXT_LENGTH
 reports = []
-for voice, text in [*[(v, text) for v in voices], (voices[0], maximum_chunk)]:
+for voice, text in [*[(v, text) for v in voices], (voices[0], maximum_chunk), (voices[0], "Yes. Exactly. This thought continues\nacross a wrapped line.")]:
     started = time.monotonic()
     status, result, cache_status = request("/synthesize", {"text": text, "voice": voice["id"]})
     assert status == 200, (voice["id"], status, result)

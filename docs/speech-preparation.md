@@ -4,14 +4,24 @@ On a configured Kokoro server, the speech worker queues **each user's ten most r
 
 Preparation uses **kokoro:bf_emma** only. Other voices still work on demand. Select Kokoro Emma in Listen to use the prepared audio; existing browser voice preferences are not overwritten.
 
-Each durable queue job prepares one canonical article chunk (up to 160 characters), then enqueues a versioned continuation. Foreground listeners take priority; busy background work is deferred without exhausting its retries. Other failures still have bounded retries and are revisited by reconciliation. Failure logs include bookmark ID, offset, content version and retries remaining, never article text. Stop/restart does not discard completed cached audio.
+Each durable queue job prepares one canonical article batch (up to 320 Unicode codepoints), then enqueues a versioned continuation. Foreground listeners take priority; busy background work is deferred without exhausting its retries. Other failures still have bounded retries and are revisited by reconciliation. Failure logs include bookmark ID, offset, content version and retries remaining, never article text. Stop/restart does not discard completed cached audio.
+
+## Sentence batches
+
+Preparation and playback use the same deterministic shared chunker. It groups complete sentences within a paragraph, targeting 240 codepoints. A group below 160 codepoints can exceed that target to include the next sentence, up to a hard 320-codepoint ceiling; a short final sentence can also join the preceding group when it fits. Titles/initials and `e.g.`/`i.e.` are repaired after platform sentence segmentation. Blank lines end paragraphs; ordinary wrapped lines do not split model utterances. Canonical text and offsets are never rewritten.
+
+A sentence larger than the hard ceiling falls back to substantial clause boundaries, then whitespace, then a Unicode-codepoint-safe cut for an overlong token. Such forced mid-sentence splits remain possible. The native pipeline retains its 510-phoneme segmentation limit, but oversized/truncated phoneme results now fail explicitly rather than silently dropping text.
+
+The content-version hash includes `speech-sentences-v1`. Old playback continuations receive restart/409, and old preparation jobs restart at zero. Changed batch texts need new cached audio; there is no cache purge or database migration.
+
+**Rollout:** deploy the updated Kokoro service before the application/worker image, because the old service rejects requests above 160 characters. The 240/320 envelope is provisional: run Pi latency/RSS and listening checks before deployment. A local Mac ONNX/Emma check with 3 inference threads measured 160/240/320-character requests at about 2.0/3.0/3.9 seconds with process peak RSS about 1.69/2.00/2.36 GB. These are sequential single-process measurements, not Pi/container guarantees or a listening comparison; the 320-character case is close enough to the 2.5-GiB limit to require that deployment gate.
 
 ## Cache
 
 - Kokoro's `/cache` must be writable and persistent. The Pi uses the named Docker volume `karakeep-kokoro-cache`; do not publish the worker's port.
 - Cache entries are private, compressed timed-audio JSON, keyed by exact text, voice, pinned model/voice revision and alignment version.
 - The single-writer cache uses atomic replacement and removes interrupted writes at startup.
-- Article text is phonemized literally, without Markdown pronunciation preprocessing. Bracketed text uses a new cache voice variant (`:literal-v1`) so legacy preprocessed entries cannot omit text; other entries remain reusable.
+- Article text is phonemized literally, without Markdown pronunciation preprocessing. Bracketed text uses a cache voice variant (`:literal-v1`) so legacy preprocessed entries cannot omit text. Requests containing CR/LF use `:unwrapped-v1` to avoid reusing audio generated with per-line utterance resets. Other matching entries remain reusable.
 - Responses remove only digital-zero edge padding, retaining every nonzero PCM sample plus 50 ms before speech and 100 ms afterward (250 ms after sentence/clause punctuation). Word times shift/clamp to the delivered WAV; UTF-16 text offsets do not change. Raw cached WAVs are not rewritten.
 - Storage is bounded to 2 GiB, evicting least-recently-used chunks. Older evicted audio is regenerated on demand.
 - Playback retains the normal owner/session/CSRF checks before contacting the worker. Cached audio is not exposed by a public file server.
@@ -24,12 +34,14 @@ With the Kokoro Python dependencies installed (the Dockerfile runs these too):
 
 ```sh
 python -m unittest discover -s docker/kokoro -p 'test_*.py'
+pnpm test --filter=@karakeep/shared -- --run utils/speech.test.ts
+pnpm test --filter=@karakeep/api -- --run routes/speech.test.ts
 pnpm test --filter=@karakeep/workers -- --run
-pnpm typecheck --filter=@karakeep/workers
+pnpm typecheck --filter=@karakeep/shared --filter=@karakeep/api --filter=@karakeep/workers
 node scripts/verify-read-aloud-audio.cjs
 ```
 
-The 2026-10-30 read-only production investigation found 41/41 cached chunks for the reported example and two incomplete articles failing token mapping around code/URL apostrophes. Local validation of the patched phonemizer/offset mapper passed all 714 canonical chunks across that user's ten readable saved articles, without running model inference. Applying the padding fix locally to the example's 41 cached WAVs reduced mean digital edge silence from 620 ms to 147 ms (76%), preserving every nonzero sample and valid word times. This is not a manual listening test or a deployed fix. Both the Kokoro image and application worker image need updating to apply all changes; no cache purge or DB migration is needed.
+The 2026-10-30 read-only production investigation found 41/41 cached chunks for the reported example and two incomplete articles failing token mapping around code/URL apostrophes. Local validation of the patched phonemizer/offset mapper passed all 714 canonical chunks across that user's ten readable saved articles, without running model inference. Applying the padding fix locally to the example's 41 cached WAVs reduced mean digital edge silence from 620 ms to 147 ms (76%), preserving every nonzero sample and valid word times. The padding/recovery fixes were subsequently deployed in `bccd3084`, with 714/714 Emma chunks verified across the user's top ten at that time. These historical measurements do not validate the newer sentence-batching policy above. Manual listening and Pi benchmarking of that policy remain outstanding.
 
 ## Pi deployment and rollback
 

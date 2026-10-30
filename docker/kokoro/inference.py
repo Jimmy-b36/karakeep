@@ -24,7 +24,7 @@ def join_model_timestamps(tokens, phonemes, duration, vocab):
     if len(frames) != known[-1] + 2 or not np.all(np.isfinite(frames)) or np.any(frames < 0):
         raise ValueError("Invalid model durations")
     raw = "".join((t.phonemes or "") + (" " if t.whitespace else "") for t in tokens)
-    if not raw.strip().startswith(phonemes):
+    if raw.strip() != phonemes:
         raise ValueError("Token phonemes differ from the model input")
     padding = len(raw) - len(raw.lstrip())
     # Preserve Kokoro's three-frame boundary calibration; each frame is 600/24000 s.
@@ -44,8 +44,12 @@ def join_model_timestamps(tokens, phonemes, duration, vocab):
 
 
 def generate(g2p, session, vocab, voices, text, voice, speed):
-    for result in g2p(text):
+    for result in g2p(text, split_pattern=None):
         phonemes = result.phonemes
+        # Never accept the upstream pipeline's oversized-token truncation.
+        raw = "".join((t.phonemes or "") + (" " if t.whitespace else "") for t in result.tokens or [])
+        if not 0 < len(phonemes) <= 510 or raw.strip() != phonemes:
+            raise ValueError("Speech exceeds the model phoneme limit or loses token content")
         ids = [vocab[p] for p in phonemes if p in vocab]
         waveform, duration = session.run(None, {
             "input_ids": np.array([[0, *ids, 0]], dtype=np.int64),

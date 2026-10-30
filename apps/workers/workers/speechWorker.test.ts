@@ -266,7 +266,7 @@ describe("speech preparation", () => {
     expect(mocks.html).toHaveBeenCalledWith(expect.anything(), "owner");
     expect(mocks.synthesize).toHaveBeenCalledOnce();
     const [text, voice, options] = mocks.synthesize.mock.calls[0]!;
-    expect(Array.from(text).length).toBeLessThanOrEqual(160);
+    expect(Array.from(text).length).toBeLessThanOrEqual(320);
     expect(voice).toBe("kokoro:bf_emma");
     expect(options).toEqual({ background: true, signal: request.abortSignal });
     expect(mocks.enqueue).toHaveBeenCalledWith(
