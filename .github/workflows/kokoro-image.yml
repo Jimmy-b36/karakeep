@@ -25,8 +25,13 @@ jobs:
       - name: Offline audio and word timing smoke test
         run: |
           set -euo pipefail
+          PHONEMIZER_TMPFS="/opt/phonemizer-tmp:rw,nosuid,nodev,exec,size=16m"
+          PHONEMIZER_TMPFS+=",mode=0700,uid=10001,gid=10001"
           docker run -d --name kokoro-smoke --network none --cap-drop ALL --security-opt no-new-privileges \
-            --memory 2560m --cpus 3 --pids-limit 256 \
+            --memory 2560m --cpus 3 --pids-limit 256 --read-only \
+            --tmpfs /tmp:rw,nosuid,noexec,size=256m \
+            --tmpfs /cache:noexec,uid=10001,gid=10001,size=64m \
+            --tmpfs "$PHONEMIZER_TMPFS" -e TMPDIR=/opt/phonemizer-tmp \
             -e KOKORO_TOKEN=synthetic-test-token-000000000000000000 "${IMAGE}"
           docker exec -i kokoro-smoke python - <<'PY'
           import base64, json, sys, time, urllib.request, urllib.error
@@ -54,6 +59,8 @@ jobs:
                * 5)[:MAX_TEXT_LENGTH],
               'Yes. Exactly. This thought continues\n'
               'across a wrapped line with original word offsets.',
+              'Katie Hempenius',
+              'Katie Hempenius\n\n\n\n',
           ]
           for text in texts:
               started = time.monotonic()
@@ -65,7 +72,11 @@ jobs:
               response = json.load(urllib.request.urlopen(request, timeout=70))
               audio = base64.b64decode(response['audio'], validate=True)
               assert audio[:4] == b'RIFF' and audio[8:12] == b'WAVE'
-              assert len(response['words']) >= 8
+              assert len(response['words']) >= (2 if len(text) < 20 else 8)
+              if text.startswith('Katie '):
+                  spans = [text[w['from']:w['to']].strip()
+                           for w in response['words']]
+                  assert 'Katie' in spans and 'Hempenius' in spans
               for word in response['words']:
                   assert text[word['from']:word['to']].strip()
                   assert 0 <= word['start'] <= word['end'] <= response['duration'] + 0.1

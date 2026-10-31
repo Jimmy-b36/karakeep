@@ -63,6 +63,8 @@ def generate(g2p, session, vocab, voices, text, voice, speed):
 
 def literal_pipeline(lang):
     pipeline = KPipeline(lang_code=lang, model=False, repo_id="hexgrad/Kokoro-82M")
+    if pipeline.g2p.fallback is None:
+        raise RuntimeError("Kokoro requires espeak fallback; check executable phonemizer TMPDIR")
     # Article text is already plain text, not Misaki's Markdown pronunciation syntax.
     pipeline.g2p = partial(pipeline.g2p, preprocess=False)
     return pipeline

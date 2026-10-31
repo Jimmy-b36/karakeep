@@ -126,7 +126,8 @@ def main(prepare=False):
     token = os.environ.get("KOKORO_TOKEN", "")
     if len(token) < 32:
         raise RuntimeError("KOKORO_TOKEN must contain at least 32 characters")
-    cache = SpeechCache(os.environ.get("KOKORO_CACHE_DIR", "/cache"), f"v2:{MODEL_HASH}:{MODEL_REVISION}")
+    # Old entries may omit names when espeak was silently unavailable.
+    cache = SpeechCache(os.environ.get("KOKORO_CACHE_DIR", "/cache"), f"v3:{MODEL_HASH}:{MODEL_REVISION}")
     busy = threading.Lock()
     last_foreground = float("-inf")
 

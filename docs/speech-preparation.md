@@ -21,7 +21,7 @@ Foreground lock acquisition is capped at 30 seconds, reserving 40 seconds of the
 ## Cache
 
 - Kokoro's `/cache` must be writable and persistent. The Pi uses the named Docker volume `karakeep-kokoro-cache`; do not publish the worker's port.
-- Cache entries are private, compressed timed-audio JSON, keyed by exact text, voice, pinned model/voice revision and alignment version.
+- Cache entries are private, compressed timed-audio JSON, keyed by exact text, voice, pinned model/voice revision and alignment version. Namespace `v3` excludes earlier audio that may have silently omitted unfamiliar names while espeak was unavailable; old files are not purged.
 - The single-writer cache uses atomic replacement and removes interrupted writes at startup.
 - Article text is phonemized literally, without Markdown pronunciation preprocessing. Bracketed text uses a cache voice variant (`:literal-v1`) so legacy preprocessed entries cannot omit text. Requests containing CR/LF use `:unwrapped-v1` to avoid reusing audio generated with per-line utterance resets. Other matching entries remain reusable.
 - Responses remove only digital-zero edge padding, retaining every nonzero PCM sample plus 50 ms before speech and 100 ms afterward (250 ms after sentence/clause punctuation). Word times shift/clamp to the delivered WAV; UTF-16 text offsets do not change. Raw cached WAVs are not rewritten.
@@ -48,6 +48,8 @@ The 2026-10-30 read-only production investigation found 41/41 cached chunks for 
 ## Pi deployment and rollback
 
 Kokoro Compose: `/data/coolify/auxiliary/kokoro/compose.json` (2.5 GiB, 3 CPUs, read-only root filesystem, private network). App image and raw/rendered Compose are persisted in Coolify.
+
+**Phonemizer runtime:** retain the existing `noexec` `/tmp`, but mount `/opt/phonemizer-tmp` as a private 16-MiB executable tmpfs (`rw,nosuid,nodev,exec,size=16m,mode=0700,uid=10001,gid=10001`) and set `TMPDIR=/opt/phonemizer-tmp`. The espeak wrapper copies its shared library into a temporary directory before loading it. A `noexec` temporary directory disables this fallback; Kokoro can then omit unfamiliar names or fail on author-name-only blocks. Startup now rejects a missing fallback instead of silently serving incomplete narration. The ARM64 workflow tests the same read-only/noexec layout, including an unfamiliar name and trailing paragraph separators.
 
 Release artifacts and private rollback material: `/root/speech-cache-release-20261023` and `/root/speech-cache-release-20261023-v2`. Coolify settings snapshots are under `/data/coolify/backups/speech-cache-release-20261023*-before.json`. A consistent application SQLite backup was taken at `/data/backups/pre-speech-cache-20261023.db` inside Karakeep's data volume. These backups contain secrets/user data; keep them private. Do not restore the whole application database merely to roll back an image.
 

@@ -123,6 +123,20 @@ class SynthesisTests(unittest.TestCase):
                 tokens = [token for result in pipeline(text) for token in result.tokens or []]
                 self.assertEqual("".join(token.text + token.whitespace for token in tokens).strip(), text)
 
+    def test_missing_espeak_fallback_fails_at_startup_instead_of_omitting_names(self):
+        from inference import literal_pipeline
+        unavailable = SimpleNamespace(g2p=SimpleNamespace(fallback=None))
+        with patch("inference.KPipeline", return_value=unavailable), \
+             self.assertRaisesRegex(RuntimeError, "requires espeak fallback"):
+            literal_pipeline("b")
+
+    def test_proper_names_have_phonemes_in_both_english_pipelines(self):
+        from inference import literal_pipeline
+        for lang in ("a", "b"):
+            tokens = [t for r in literal_pipeline(lang)("Katie Hempenius", split_pattern=None) for t in r.tokens or []]
+            self.assertEqual([t.text for t in tokens], ["Katie", "Hempenius"])
+            self.assertTrue(all(t.phonemes for t in tokens))
+
     def test_apostrophes_dropped_inside_merged_tokens_keep_original_offsets(self):
         text = "😀 textBox.addEventListener('input', handler)"
         def pipeline(_text, **_kwargs):
@@ -201,6 +215,7 @@ class SynthesisTests(unittest.TestCase):
              patch.dict("os.environ", {"KOKORO_TOKEN": "x" * 32}), \
              patch("service.synthesize", return_value=raw) as generate:
             main()
+            self.assertTrue(cache_class.call_args.args[1].startswith("v3:"))
             handler_class = server.call_args.args[1]
             cache = cache_class.return_value
             cache.get.return_value = raw
